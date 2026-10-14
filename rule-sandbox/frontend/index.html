@@ -1404,7 +1404,7 @@ const socOf = id => SOC.find(s=>s.id===id);
 const RSB = {online:false, base:""};
 /* API_BASE 候选列表：部署后端后把第一项替换为真实公网地址，如 https://xxx.onrender.com
    "" = 同源（后端托管本页时自动生效）；127.0.0.1 = 本地双击打开页面时连本地后端 */
-const API_BASE_CANDIDATES = ["https://your-backend-url.com", "", "http://127.0.0.1:8017"];
+const API_BASE_CANDIDATES = ["https://sandbox-backend-e2cr.onrender.com", "", "http://127.0.0.1:8017"];
 function apiUrl(p){ return (RSB.base || "") + p; }
 async function apiGet(p){ const r = await fetch(apiUrl(p), {method:"GET"}); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
 async function apiPost(p, body){ const r = await fetch(apiUrl(p), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
