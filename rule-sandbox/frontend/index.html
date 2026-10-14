@@ -1,0 +1,2196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>规则沙盒：虚拟社会反应预演系统 V2</title>
+<style>
+  :root{
+    --primary:#18265c; --primary-deep:#0e1a45;
+    --bg:#f7f5f0; --card:#ffffff; --text:#17150f; --text-sub:#57534a; --muted:#9b948a;
+    --line:#e6e1d6; --green:#3d7a50; --amber:#a4622d; --red:#a83a32; --violet:#5b4a86; --blue:#2c4a9e;
+    --gold:#a4622d;
+    --radius:4px; --shadow:0 1px 2px rgba(23,21,15,.04),0 8px 28px rgba(23,21,15,.06);
+    --shadow-lg:0 2px 6px rgba(23,21,15,.06),0 18px 50px rgba(23,21,15,.10);
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+    --serif:"Noto Serif SC","Source Han Serif SC","Songti SC",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.75;min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  ::selection{background:#1d2a56;color:#fff}
+  .grid-bg{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(rgba(23,21,15,.05) 1px,transparent 1px);background-size:22px 22px}
+  .glow-orb{display:none}
+
+  /* ───── 顶栏：杂志刊头 ───── */
+  header.topbar{position:sticky;top:0;z-index:50;background:rgba(247,245,240,.86);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid var(--line);padding:0 32px;height:64px;display:flex;align-items:center;gap:18px}
+  .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;color:var(--text);font-family:var(--serif);letter-spacing:1px}
+  .logo .logo-ico{width:38px;height:38px;border-radius:50%;flex:none;background:var(--text);color:#f7f5f0;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .logo small{display:block;font-family:var(--sans);font-size:9.5px;color:var(--muted);font-weight:500;letter-spacing:2.5px;text-transform:uppercase}
+  .top-society{margin-left:auto;font-size:12px;color:var(--text-sub);background:transparent;border:1px solid var(--line);padding:5px 14px;border-radius:999px;display:none;align-items:center;gap:6px;letter-spacing:.5px}
+  .top-society.show{display:flex}
+  .top-society b{font-weight:600;color:var(--text)}
+  .api-badge{flex:none;font-size:10.5px;padding:5px 12px;border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);letter-spacing:1px;text-transform:uppercase;font-family:var(--sans)}
+  .api-badge.on{background:#fff;color:var(--green);border-color:rgba(61,122,80,.4)}
+  .api-badge.off{background:transparent;color:var(--muted)}
+  .api-badge::before{content:"";width:6px;height:6px;border-radius:50%}
+  .api-badge.on::before{background:var(--green)}
+  .api-badge.off::before{background:var(--muted)}
+  .api-badge.pending{background:transparent;color:var(--amber);border:1px dashed rgba(164,98,45,.55);text-transform:none;letter-spacing:.5px}
+  .api-badge.pending::before{background:var(--amber)}
+  .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  .mode-box{border:1px solid var(--line);padding:18px 20px;position:relative;background:#faf8f4}
+  .mode-box h4{font-family:var(--serif);font-size:17px;margin:6px 0 8px}
+  .mode-box p{font-size:13px;color:var(--text-sub);line-height:1.7;margin:0}
+  .mode-box .m-tag{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+  .mode-now{border-left:3px solid var(--gold)}
+  .mode-now .m-tag{color:var(--gold)}
+  .mode-future{border-left:3px solid var(--line);border-style:solid}
+  .mode-future .m-tag{color:var(--text-sub)}
+  .mode-future h4::after{content:" ↗";color:var(--muted);font-size:13px;font-family:var(--sans)}
+
+  /* ───── 步骤条 ───── */
+  .stepper-wrap{background:rgba(247,245,240,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);position:sticky;top:64px;z-index:40;padding:12px 28px;display:none}
+  .stepper-wrap.show{display:block}
+  .stepper{display:flex;align-items:center;justify-content:center;overflow-x:auto;scrollbar-width:none}
+  .stepper::-webkit-scrollbar{display:none}
+  .step-dot{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-family:var(--mono);background:transparent;color:var(--muted);cursor:default;transition:all .35s;position:relative;border:1px solid var(--line)}
+  .step-dot.visited{color:var(--text-sub);cursor:pointer;border-color:var(--text-sub)}
+  .step-dot.done{background:var(--text);color:#f7f5f0;border-color:var(--text);cursor:pointer}
+  .step-dot.active{background:transparent;color:var(--text);border-color:var(--text);transform:scale(1.2);font-weight:700}
+  .step-dot .tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#f7f5f0;font-size:11px;padding:4px 10px;border-radius:2px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;font-weight:400;letter-spacing:.5px}
+  .step-dot:hover .tip{opacity:1}
+  .step-line{flex:none;width:20px;height:1px;background:var(--line);transition:background .3s}
+  .step-line.done{background:var(--text)}
+
+  main{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:56px 26px 140px}
+  .page{display:none;animation:pageIn .5s cubic-bezier(.2,.8,.2,1) both}
+  .page.active{display:block}
+  @keyframes pageIn{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+
+  /* ───── 页面标题：杂志章节体例 ───── */
+  .page-head{margin-bottom:36px;padding-bottom:26px;border-bottom:1px solid var(--text);position:relative}
+  .page-head::after{content:"";position:absolute;bottom:-1px;left:0;width:64px;height:3px;background:var(--gold)}
+  .step-tag{display:inline-flex;align-items:center;gap:10px;font-size:10.5px;font-weight:600;color:var(--text-sub);text-transform:uppercase;letter-spacing:3px;margin-bottom:16px;font-family:var(--mono)}
+  .step-tag::before{content:"";width:24px;height:1px;background:var(--gold)}
+  h1.page-title{font-size:38px;font-weight:600;font-family:var(--serif);letter-spacing:1px;color:var(--text);margin-bottom:14px;line-height:1.3}
+  h1.page-title .hl{color:var(--gold);font-style:italic}
+  .page-desc{font-size:14.5px;color:var(--text-sub);max-width:720px;line-height:1.9}
+  .page-desc b{color:var(--text);font-weight:600}
+
+  /* ───── 识别横幅 ───── */
+  .id-banner{display:none;margin-bottom:26px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--text);background:var(--text)}
+  .id-banner.show{display:block}
+  .ib-top{display:flex;align-items:center;gap:14px;padding:12px 20px;flex-wrap:wrap}
+  .ib-label{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#a19686;font-family:var(--mono);flex:none}
+  .ib-main{font-size:14.5px;font-weight:600;color:#f7f5f0;font-family:var(--serif);letter-spacing:1px}
+  .ib-main .sep{margin:0 10px;color:#5c5648}
+  .id-badge{font-size:11px;padding:4px 12px;border-radius:999px;font-weight:600;letter-spacing:.5px}
+  .id-badge.high{background:rgba(164,98,45,.25);color:#e8b98a;border:1px solid rgba(164,98,45,.6)}
+  .id-badge.infer{background:rgba(220,180,90,.18);color:#e3c27f;border:1px solid rgba(220,180,90,.5)}
+  .ib-body{display:flex;gap:28px;padding:12px 20px;border-top:1px solid #322e24;flex-wrap:wrap;font-size:12.5px;color:#b5afa2}
+  .ib-body b{color:#e8e3d8;font-weight:600}
+
+  /* ───── 按钮：Apple 胶囊 ───── */
+  .btn{appearance:none;border:none;cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:600;padding:13px 30px;border-radius:999px;transition:all .25s;letter-spacing:.3px;white-space:nowrap}
+  .btn:disabled{opacity:.28;cursor:not-allowed}
+  .btn-primary{background:var(--text);color:#f7f5f0}
+  .btn-primary:not(:disabled):hover{background:#000;transform:translateY(-1px);box-shadow:0 8px 24px rgba(23,21,15,.22)}
+  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .btn-ghost:not(:disabled):hover{border-color:var(--text);background:#fff}
+  .btn-amber{background:transparent;color:var(--gold);border:1px solid rgba(164,98,45,.45)}
+  .btn-amber:not(:disabled):hover{background:rgba(164,98,45,.08);border-color:var(--gold)}
+  .btn-green{background:transparent;color:var(--green);border:1px solid rgba(61,122,80,.4)}
+  .btn-green:not(:disabled):hover{background:rgba(61,122,80,.07)}
+  .actions{display:flex;align-items:center;gap:14px;margin-top:34px;flex-wrap:wrap}
+  .btn-center{justify-content:center}
+  .hint-next{font-size:12px;color:var(--muted);letter-spacing:.5px}
+
+  /* ───── 卡片 ───── */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:30px 34px;margin-bottom:24px;box-shadow:var(--shadow)}
+  .card h3{font-size:19px;font-weight:600;font-family:var(--serif);margin-bottom:18px;letter-spacing:1px;display:flex;align-items:center;gap:10px}
+  .card h3 .ico{color:var(--gold);font-size:16px;font-weight:400}
+  .note{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.8;letter-spacing:.3px}
+  .flex-note{display:flex;gap:12px;margin-top:22px;padding:18px 20px;background:#f2efe8;border-radius:var(--radius);border:1px solid var(--line);font-size:13px;color:var(--text-sub);line-height:1.85}
+  .flex-note .ico{font-size:16px;flex:none}
+  .flex-note b{color:var(--text)}
+
+  /* ───── 首页：杂志封面 ───── */
+  .hero{padding:64px 0 56px;border-bottom:1px solid var(--text);margin-bottom:44px;position:relative}
+  .hero .badge{display:inline-flex;align-items:center;gap:10px;font-size:10px;font-weight:600;letter-spacing:3.5px;text-transform:uppercase;color:var(--text-sub);font-family:var(--mono);margin-bottom:30px}
+  .hero .badge::before,.hero .badge::after{content:"";width:32px;height:1px;background:var(--gold)}
+  .hero h1{font-size:64px;font-weight:600;font-family:var(--serif);line-height:1.22;letter-spacing:2px;color:var(--text);margin-bottom:22px}
+  .hero h1 em{font-style:italic;color:var(--gold)}
+  .hero .sub{font-size:16.5px;color:var(--text-sub);max-width:560px;line-height:1.95;font-family:var(--serif)}
+  .hero .sub b{color:var(--text);font-weight:600}
+  .hero .meta{display:flex;gap:56px;margin-top:48px;flex-wrap:wrap}
+  .meta-item .num{font-size:40px;font-weight:600;font-family:var(--serif);color:var(--text);line-height:1.1}
+  .meta-item .num::after{content:"";display:block;width:28px;height:2px;background:var(--gold);margin-top:8px}
+  .meta-item .lab{font-size:11px;letter-spacing:2px;color:var(--muted);margin-top:8px;text-transform:uppercase}
+  .cover-art{margin:0 0 48px;text-align:center}
+  .cover-art svg{max-width:100%;height:auto}
+
+  .func-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-bottom:30px}
+  .func-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px 24px;transition:all .3s;position:relative}
+  .func-card::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:var(--text);transform:scaleX(0);transform-origin:left;transition:transform .35s}
+  .func-card:hover::before{transform:scaleX(1)}
+  .func-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px)}
+  .f-step{font-size:9.5px;font-weight:600;letter-spacing:2.5px;color:var(--gold);font-family:var(--mono);margin-bottom:14px;text-transform:uppercase}
+  .f-ico{font-size:30px;margin-bottom:14px}
+  .func-card h4{font-size:16px;font-weight:600;font-family:var(--serif);margin-bottom:10px;letter-spacing:.5px}
+  .func-card p{font-size:12.5px;color:var(--text-sub);line-height:1.85}
+
+  .feature-strip{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:36px}
+  .feature-chip{font-size:11.5px;color:var(--text-sub);border:1px solid var(--line);padding:7px 14px;border-radius:999px;letter-spacing:.3px;background:var(--card)}
+  .feature-chip b{color:var(--gold);font-weight:700;font-size:10px;letter-spacing:1.5px;margin-right:6px;font-family:var(--mono)}
+
+  /* ───── 第2页 社会选卡 ───── */
+  .soc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .soc-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px 22px;cursor:pointer;transition:all .3s;position:relative}
+  .soc-card:hover{border-color:var(--text-sub);box-shadow:var(--shadow)}
+  .soc-card.on,.soc-card.selected{border-color:var(--text);box-shadow:var(--shadow-lg);background:#fff}
+  .soc-card .check{display:none;position:absolute;top:14px;right:16px;width:24px;height:24px;border-radius:50%;background:var(--text);color:#f7f5f0;font-size:12px;align-items:center;justify-content:center}
+  .soc-card.on::after,.soc-card.selected::after{content:"";display:none}
+  .soc-card.on .check,.soc-card.selected .check{display:flex}
+  .s-ico{font-size:32px;margin-bottom:14px}
+  .s-head{font-size:16.5px;font-weight:600;font-family:var(--serif);margin-bottom:8px;letter-spacing:.5px}
+  .s-app{font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.7}
+  .s-cats{font-size:11px;color:var(--muted);line-height:1.75;padding-top:12px;border-top:1px solid var(--line)}
+  .s-cats b{color:var(--text-sub);letter-spacing:.5px}
+
+  /* ───── 第3页 输入 ───── */
+  .rule-input{width:100%;min-height:150px;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;font-family:var(--sans);font-size:15px;line-height:1.9;color:var(--text);background:#fdfcf9;resize:vertical;transition:all .25s}
+  .rule-input:focus{outline:none;border-color:var(--text);box-shadow:0 0 0 3px rgba(23,21,15,.06)}
+  .rule-input::placeholder{color:var(--muted)}
+  .ex-title{font-size:11px;letter-spacing:2px;color:var(--muted);margin:20px 0 12px;text-transform:uppercase;font-family:var(--mono)}
+  .ex-list{display:flex;flex-wrap:wrap;gap:10px}
+  .ex-btn{font-family:var(--sans);font-size:12.5px;padding:9px 18px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text-sub);cursor:pointer;transition:all .22s;letter-spacing:.3px}
+  .ex-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(164,98,45,.05)}
+  .opt-row{display:flex;gap:20px;align-items:flex-start;padding:14px 0;border-bottom:1px dashed var(--line)}
+  .opt-row:last-child{border-bottom:none}
+  .o-label{flex:none;width:84px;font-size:13px;font-weight:600;color:var(--text);padding-top:7px;font-family:var(--serif);letter-spacing:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{font-size:12.5px;padding:7px 16px;border-radius:999px;border:1px solid var(--line);cursor:pointer;color:var(--text-sub);transition:all .22s;user-select:none;background:transparent}
+  .chip:hover{border-color:var(--text-sub)}
+  .chip.on{background:var(--text);color:#f7f5f0;border-color:var(--text)}
+
+  /* ───── 第4页 解析 ───── */
+  .parse-hero{margin-bottom:26px;padding:38px 40px 34px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);position:relative;text-align:center}
+  .parse-hero::before{content:"RULE PREVIEW · 规则预览";position:absolute;top:14px;left:20px;font-size:9px;letter-spacing:2.5px;color:var(--muted);font-family:var(--mono)}
+  .quote-ico{font-family:Georgia,serif;font-size:56px;color:var(--gold);line-height:.6;margin-bottom:16px}
+  .rule-text{font-size:21px;font-family:var(--serif);font-weight:600;line-height:1.7;color:var(--text);letter-spacing:.5px;max-width:680px;margin:0 auto}
+  .parse-ok{margin-top:18px;font-size:11px;letter-spacing:2.5px;color:var(--text-sub);text-transform:uppercase;font-family:var(--mono)}
+  .infer-note,.soft-note{display:none;margin-bottom:20px;padding:18px 22px;border-radius:var(--radius);font-size:13.5px;line-height:1.9}
+  .infer-note.show{display:block;background:rgba(164,98,45,.07);border:1px solid rgba(164,98,45,.3);color:#6d4a26}
+  .infer-note b,.soft-note b{font-weight:700}
+  .soft-note.show{display:block;background:rgba(43,74,158,.06);border:1px solid rgba(43,74,158,.25);color:#2c4a9e}
+  .mismatch-box{display:none;margin-bottom:24px;padding:34px 38px;background:#fff;border:1px solid var(--red);border-radius:var(--radius);animation:pageIn .4s ease both}
+  .mismatch-box.show{display:block}
+  .mismatch-box h3{font-family:var(--serif);font-size:20px;color:var(--red);margin-bottom:14px;letter-spacing:.5px}
+  .mismatch-box p{font-size:13.5px;color:var(--text-sub);line-height:1.9;margin-bottom:14px}
+  .ms-sug{font-size:13px;color:var(--text-sub);line-height:2;margin-bottom:20px;padding:16px 20px;background:#faf8f4;border-left:2px solid var(--gold)}
+  .ms-actions{display:flex;gap:12px;flex-wrap:wrap}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  .tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
+  .tbl th{text-align:left;padding:13px 18px;font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:#f7f5f0;background:var(--text);font-weight:600;white-space:nowrap;font-family:var(--mono)}
+  .tbl td{padding:14px 18px;border-top:1px solid var(--line);color:var(--text-sub);vertical-align:top;line-height:1.8}
+  .tbl td b{color:var(--text)}
+  .tbl tr.hl-row td{background:rgba(164,98,45,.06)}
+  .cell-list{margin:0;padding-left:18px}
+  .cell-list li{margin:4px 0}
+  .tag{display:inline-block;font-size:11.5px;padding:3px 12px;border-radius:999px;font-weight:600;letter-spacing:.5px;border:1px solid}
+  .tag-blue{color:var(--blue);border-color:rgba(44,74,158,.35);background:rgba(44,74,158,.05)}
+  .tag-green{color:var(--green);border-color:rgba(61,122,80,.35);background:rgba(61,122,80,.05)}
+  .tag-amber{color:var(--amber);border-color:rgba(164,98,45,.35);background:rgba(164,98,45,.06)}
+  .tag-violet{color:var(--violet);border-color:rgba(91,74,134,.35);background:rgba(91,74,134,.05)}
+  .tag-red{color:var(--red);border-color:rgba(168,58,50,.35);background:rgba(168,58,50,.05)}
+
+  /* ───── 第5页 问卷 ───── */
+  .qn-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px}
+  .m-chip{font-size:12px;color:var(--text-sub);border:1px solid var(--line);background:var(--card);padding:6px 15px;border-radius:999px;letter-spacing:.3px}
+  .m-chip b{color:var(--text);font-weight:600}
+  .qn-section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px 28px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .q-sec-head{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600;font-family:var(--serif);padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--line);letter-spacing:.5px;flex-wrap:wrap}
+  .sec-no{font-family:var(--mono);font-size:20px;color:var(--gold);font-weight:600}
+  .cnt{font-size:11px;color:var(--muted);font-family:var(--sans);margin-left:auto;letter-spacing:1px}
+  .q-item{padding:14px 0;border-bottom:1px dashed var(--line)}
+  .q-item:last-child{border-bottom:none}
+  .q-text{font-size:14px;color:var(--text);font-weight:500;margin-bottom:10px;line-height:1.7}
+  .q-opts{display:flex;flex-wrap:wrap;gap:8px}
+  .q-opt{font-size:12px;padding:5px 14px;border-radius:999px;border:1px solid var(--line);color:var(--text-sub);background:#faf8f4}
+  .od-item{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;padding:3px 0}
+  .od-item a{color:inherit;text-decoration:none;border-bottom:1px solid rgba(29,26,20,.25);font-weight:600}
+  .od-item a:hover{color:var(--gold);border-bottom-color:var(--gold)}
+  .od-url{font-family:var(--mono);font-size:11px;color:var(--text-sub);letter-spacing:.2px}
+
+  /* ───── 第6页 导入 ───── */
+  .import-zone{border:1.5px dashed var(--line);border-radius:var(--radius);padding:42px 24px;text-align:center;cursor:pointer;transition:all .25s;background:#fdfcf9}
+  .import-zone:hover{border-color:var(--gold);background:rgba(164,98,45,.03)}
+  .import-zone.on{border-color:var(--text);background:#fff}
+  .iz-ico{font-size:34px;margin-bottom:12px}
+  .import-zone p{font-size:13px;color:var(--text-sub)}
+  .formats{margin-top:10px;font-size:11px;color:var(--muted);letter-spacing:1px}
+  .imported{display:none;margin-top:18px;padding:16px 20px;background:#fff;border:1px solid var(--green);border-radius:var(--radius);font-size:13px;color:var(--text-sub);align-items:center;gap:12px}
+  .imported.show{display:flex}
+  .imported-file .ok-ico{width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .pipeline{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:18px 0 8px;font-size:12.5px;color:var(--text-sub)}
+  .pipe-node{background:var(--text);color:#f7f5f0;padding:7px 16px;border-radius:999px;font-weight:500;letter-spacing:.5px}
+  .pipe-arrow{color:var(--gold);font-weight:700}
+  .kv{display:grid;grid-template-columns:1fr 1.4fr 1.6fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .kv .k{background:#f2efe8;padding:12px 16px;font-size:13px;color:var(--text);font-weight:600}
+  .kv .v{background:#fff;padding:12px 16px;font-size:13px;color:var(--text-sub)}
+
+  /* ───── 第7页 推演（深色编辑部面板） ───── */
+  .sim-stage{background:var(--text);border-radius:var(--radius);padding:44px 40px;margin-bottom:24px;color:#f0ece2;position:relative;overflow:hidden}
+  .sim-stage::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 85% 15%,rgba(164,98,45,.18),transparent 55%);pointer-events:none}
+  .sim-header{display:flex;align-items:baseline;gap:18px;margin-bottom:30px;flex-wrap:wrap;position:relative}
+  .sim-title{font-size:24px;font-family:var(--serif);font-weight:600;letter-spacing:1.5px}
+  .sim-sub{font-size:10px;letter-spacing:3px;color:#8f877a;font-family:var(--mono);text-transform:uppercase}
+  .sim-pct{margin-left:auto;font-size:34px;font-family:var(--mono);color:var(--gold);font-weight:600}
+  .sim-steps{display:flex;flex-direction:column;gap:14px;position:relative}
+  .sim-step{display:flex;align-items:center;gap:16px;padding:15px 20px;border:1px solid #3a352a;border-radius:var(--radius);background:rgba(255,255,255,.02);transition:all .4s;opacity:.35}
+  .sim-step.running{opacity:1;border-color:var(--gold);background:rgba(164,98,45,.1);box-shadow:0 0 30px rgba(164,98,45,.15)}
+  .sim-step.done{opacity:1;border-color:#4a4436}
+  .ss-ico{width:38px;height:38px;border-radius:50%;border:1px solid #4a4436;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none;background:#211e17}
+  .sim-step.running .ss-ico{border-color:var(--gold);color:var(--gold)}
+  .ss-txt{font-size:14px;font-weight:500;letter-spacing:.5px}
+  .ss-state{margin-left:auto;font-size:10px;letter-spacing:2px;font-family:var(--mono);color:#8f877a;text-transform:uppercase}
+  .sim-step.running .ss-state{color:var(--gold)}
+  .sim-step.done .ss-state{color:#7d9c88}
+  .ss-state::after{content:"…"}
+  .sim-step.done .ss-state::after{content:" ✓"}
+  .sim-bar{height:3px;background:#3a352a;border-radius:99px;margin-top:26px;overflow:hidden}
+  .sim-bar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),#e8b98a);transition:width .6s ease;border-radius:99px}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .sim-step.running .ss-ico{animation:pulse 1.2s infinite}
+
+  /* ───── 第8页 指标 ───── */
+  .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:24px}
+  .metric-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px 22px;box-shadow:var(--shadow)}
+  .metric-card .m-label{font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-family:var(--mono);margin-bottom:14px}
+  .metric-card .m-val{font-size:34px;font-weight:600;font-family:var(--serif);color:var(--text);line-height:1.1;margin-bottom:14px}
+  .metric-card .m-val small{font-size:14px;color:var(--muted)}
+  .metric-card .m-bar{height:4px;background:#ece8df;border-radius:99px;overflow:hidden}
+  .metric-card .m-bar .m-fill{height:100%;border-radius:99px;width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
+  .metric-card .m-foot{font-size:11.5px;color:var(--muted);margin-top:10px;letter-spacing:.5px}
+  .fb-blue{background:var(--blue)} .fb-green{background:var(--green)}
+  .fb-amber{background:var(--amber)} .fb-red{background:var(--red)} .fb-violet{background:var(--violet)}
+  .mv-blue{color:var(--blue)} .mv-red{color:var(--red)} .mv-amber{color:var(--amber)}
+  .mv-green{color:var(--green)} .mv-violet{color:var(--violet)}
+  .m-val.m-strategy{font-size:19px;letter-spacing:1px}
+  .metric-card.wide{grid-column:span 2}
+  .concl-box{background:var(--text);color:#f0ece2;border-radius:var(--radius);padding:34px 38px;margin-bottom:24px;position:relative}
+  .concl-box::before{content:"OVERALL VERDICT · 总体结论";display:block;font-size:9.5px;letter-spacing:3px;color:#8f877a;font-family:var(--mono);margin-bottom:16px;text-transform:uppercase}
+  .concl-box b{color:#e8b98a;font-weight:600}
+  .bar-cell{min-width:180px}
+  .mini-bar{display:flex;align-items:center;gap:10px}
+  .mini-bar .mb-track{flex:1;height:6px;border-radius:99px;background:#ece8df;min-width:80px;overflow:hidden}
+  .mini-bar .mb-fill{height:100%;border-radius:99px;transition:width 1s ease}
+  .mini-bar .mb-num{font-size:12.5px;font-weight:700;font-family:var(--mono);width:44px;text-align:right;flex:none}
+
+  /* ───── 第10页 风险链 ───── */
+  .chain-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px 30px;margin-bottom:20px;box-shadow:var(--shadow)}
+  .chain-card h4{font-size:15px;font-weight:600;font-family:var(--serif);display:flex;align-items:center;gap:12px;margin-bottom:22px;letter-spacing:.5px;flex-wrap:wrap}
+  .chain-card h4 .chain-tag{font-size:10px;padding:3px 12px;border-radius:999px;font-weight:700;letter-spacing:1.5px;font-family:var(--mono);text-transform:uppercase}
+  .chain-tag.main{background:var(--text);color:#f7f5f0}
+  .chain-tag.alt{background:transparent;color:var(--violet);border:1px solid var(--violet)}
+  .chain-flow{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+  .chain-node{font-size:13px;font-weight:500;padding:11px 18px;border-radius:2px;background:#fdfcf9;border:1px solid var(--line);color:var(--text-sub);transition:all .3s;position:relative}
+  .chain-node::before{content:"";position:absolute;left:0;top:0;width:100%;height:100%;background:transparent}
+  .chain-node.c-start{border-color:var(--text);color:var(--text);font-weight:600;background:#fff}
+  .chain-node.c-warn{border-color:rgba(168,58,50,.5);color:var(--red);background:rgba(168,58,50,.04)}
+  .chain-node.c-end{border-color:var(--amber);color:var(--amber);background:rgba(164,98,45,.05);font-weight:600}
+  .chain-arrow{color:var(--muted);font-size:16px;font-weight:400;flex:none}
+  .chain-arrow.warn{color:var(--red)}
+
+  /* ───── 第11页 方案 ───── */
+  .plan-rec{margin-top:26px;padding:28px 32px;background:#fff;border:1px solid var(--gold);border-radius:var(--radius);position:relative;box-shadow:var(--shadow-lg)}
+  .plan-rec::before{content:"RECOMMENDED · 系统推荐";position:absolute;top:-9px;left:24px;font-size:9px;letter-spacing:2.5px;background:var(--gold);color:#fff;padding:3px 12px;border-radius:2px;font-family:var(--mono);text-transform:uppercase}
+  .plan-rec h4{font-size:17px;font-family:var(--serif);font-weight:600;margin-bottom:12px;letter-spacing:.5px}
+  .plan-rec p{font-size:13.5px;color:var(--text-sub);line-height:1.9}
+  .rec-ico{margin-right:8px;color:var(--gold)}
+
+  /* ───── 第12页 报告 ───── */
+  .report{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);overflow:hidden}
+  .report-head{padding:44px 48px 30px;border-bottom:2px solid var(--text);background:#fdfcf9;text-align:center}
+  .rh-tag{display:inline-block;font-size:9.5px;letter-spacing:3px;color:var(--gold);font-family:var(--mono);text-transform:uppercase;margin-bottom:18px}
+  .report-head h2{font-size:30px;font-family:var(--serif);font-weight:600;letter-spacing:2px;line-height:1.4}
+  .rh-meta{margin-top:16px;font-size:11.5px;color:var(--muted);letter-spacing:1px;line-height:2}
+  .report-body{padding:20px 48px 44px}
+  .r-sec{padding:26px 0;border-bottom:1px solid var(--line)}
+  .r-sec:last-child{border-bottom:none}
+  .r-sec-title{display:flex;align-items:baseline;gap:14px;font-size:17px;font-weight:600;font-family:var(--serif);margin-bottom:14px;letter-spacing:.8px}
+  .r-no{font-family:Georgia,serif;font-size:26px;color:var(--gold);font-style:italic}
+  .r-sec p{font-size:13.5px;color:var(--text-sub);line-height:2;margin:6px 0}
+  .r-sec p b{color:var(--text)}
+  .r-sec ul{padding-left:20px}
+  .r-sec li{font-size:13.5px;color:var(--text-sub);line-height:2;margin:4px 0}
+  .r-kv{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13.5px;flex-wrap:wrap}
+  .r-kv .k{flex:none;width:150px;color:var(--muted)}
+  .r-kv .v{color:var(--text-sub);flex:1;min-width:220px}
+  .cb-head{font-size:15px;font-weight:600;font-family:var(--serif);margin:20px 0 10px;letter-spacing:.5px}
+  .m-foot{text-align:center;font-size:10.5px;letter-spacing:2.5px;color:var(--muted);padding:18px;border-top:1px solid var(--line);text-transform:uppercase;font-family:var(--mono)}
+
+  /* ───── 响应式 ───── */
+  @media (max-width:900px){
+    .func-grid,.soc-grid,.metric-grid{grid-template-columns:repeat(2,1fr)}
+    .hero h1{font-size:42px}
+    h1.page-title{font-size:28px}
+    main{padding:36px 18px 100px}
+    .report-body{padding:10px 22px 32px}
+    .report-head{padding:32px 22px 24px}
+    .card{padding:22px 20px}
+  }
+  @media (max-width:560px){
+    .func-grid,.soc-grid,.metric-grid{grid-template-columns:1fr}
+    .hero h1{font-size:34px}
+    h1.page-title{font-size:24px}
+    .logo small{display:none}
+    .top-society{display:none}
+    header.topbar{padding:0 14px;gap:8px}
+    .api-badge{font-size:9.5px;padding:4px 8px;letter-spacing:.3px}
+    .actions{flex-direction:column;align-items:stretch}
+    .actions .btn{width:100%;text-align:center}
+    .kv{grid-template-columns:1fr}
+  }
+
+  /* ───── 底部进度条与状态点 ───── */
+  footer#footBar{position:fixed;bottom:0;left:0;right:0;z-index:45;display:none;align-items:center;gap:16px;padding:11px 30px;background:rgba(23,21,15,.94);backdrop-filter:blur(12px);color:#b5afa2;font-size:10px;letter-spacing:2.5px;font-family:var(--mono);text-transform:uppercase}
+  footer#footBar.show{display:flex}
+  footer#footBar .f-step{font-size:13px;color:#e8b98a;font-weight:700;letter-spacing:1px;flex:none}
+  .pulse{width:10px;height:10px;border-radius:50%;background:var(--gold);flex:none;box-shadow:0 0 14px rgba(164,98,45,.8)}
+  .imported-file{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+  .imported-file b{color:var(--text);font-weight:600}
+  .rows{color:var(--text-sub);font-weight:600;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="glow-orb orb1"></div>
+<div class="glow-orb orb2"></div>
+
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-ico">⬡</div>
+    <div>规则沙盒<small>INDEPENDENT EDITION · 独立演示版 · 本地规则库推演 · 挑战杯项目原型</small></div>
+  </div>
+  <div class="top-society" id="topSociety"><span>当前虚拟社会：</span><b id="topSocietyName">—</b></div>
+  <span class="api-badge off" id="apiBadge" title="本页面可完全独立运行，全部分析由网页内置本地规则库完成">独立演示版 · 本地规则库推演</span>
+  <span class="api-badge pending" id="agentBadge" title="系统当前可独立运行；后续可接入 WorkBuddy 智能体编排层 / MCP Server / 云端 API，实现实时智能分析与会话记忆">智能体增强模式（待接入）</span>
+</header>
+
+<div class="stepper-wrap" id="stepperWrap"><div class="stepper" id="stepper"></div></div>
+
+<main>
+  <!-- 第1页 首页 -->
+  <section class="page active" id="page-1">
+    <div class="hero">
+      <div class="badge">RULE SANDBOX V2 · 独立演示版 · 场景识别 · 专属分析 · 规则试运行与风险推演</div>
+      <h1>规则沙盒<br><em>虚拟社会反应预演系统</em></h1>
+      <p class="sub">在规则、政策或产品正式发布前，先放入虚拟社会中试运行，<b>提前发现支持度、风险链、规则漏洞和隐性受损群体</b>。</p>
+      <div class="cover-art" aria-hidden="true">
+        <svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="虚拟社会多主体推演概念插画">
+          <rect width="900" height="250" fill="#fdfcf9"/>
+          <line x1="40" y1="20" x2="40" y2="230" stroke="#a4622d" stroke-width="3"/>
+          <g opacity="0.92">
+            <circle cx="180" cy="125" r="86" fill="#17150f" opacity="0.9"/>
+            <circle cx="320" cy="95" r="62" fill="#a4622d" opacity="0.82"/>
+            <circle cx="320" cy="95" r="62" fill="none" stroke="#17150f" stroke-width="1.5" opacity="0.5"/>
+            <circle cx="420" cy="160" r="48" fill="#2c4a9e" opacity="0.8"/>
+            <circle cx="530" cy="105" r="34" fill="none" stroke="#17150f" stroke-width="1.5" stroke-dasharray="4 5"/>
+            <circle cx="530" cy="105" r="10" fill="#17150f"/>
+            <circle cx="620" cy="175" r="26" fill="#8f877a" opacity="0.65"/>
+            <circle cx="700" cy="80" r="18" fill="#a4622d" opacity="0.7"/>
+            <circle cx="780" cy="140" r="40" fill="none" stroke="#a4622d" stroke-width="1.5"/>
+            <circle cx="780" cy="140" r="6" fill="#17150f"/>
+          </g>
+          <g stroke="#8f877a" stroke-width="1" opacity="0.55">
+            <line x1="180" y1="125" x2="320" y2="95"/>
+            <line x1="320" y1="95" x2="420" y2="160"/>
+            <line x1="420" y1="160" x2="530" y2="105"/>
+            <line x1="530" y1="105" x2="620" y2="175"/>
+            <line x1="620" y1="175" x2="780" y2="140"/>
+            <line x1="320" y1="95" x2="700" y2="80"/>
+          </g>
+          <text x="96" y="212" font-family="Georgia,serif" font-size="13" fill="#8f877a" letter-spacing="2">FIG. 01 — MULTI-AGENT SIMULATION</text>
+          <text x="96" y="234" font-family="Georgia,serif" font-size="15" fill="#17150f">虚拟社会中的五类主体：一次发布，多种反应，一条风险链。</text>
+        </svg>
+      </div>
+      <div class="meta">
+        <div class="meta-item"><div class="num">8</div><div class="lab">虚拟社会类型</div></div>
+        <div class="meta-item"><div class="num">44</div><div class="lab">内置规则类别</div></div>
+        <div class="meta-item"><div class="num">5</div><div class="lab">主体角色识别</div></div>
+        <div class="meta-item"><div class="num">2</div><div class="lab">风险链（主+备）</div></div>
+        <div class="meta-item"><div class="num">4</div><div class="lab">反事实方案</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3><span class="ico">◈</span>系统说明</h3>
+      <p style="font-size:14px;color:var(--text-sub)">本系统通过构建不同类型的虚拟社会，结合<b>问卷数据、公开数据和行为推演模型</b>，模拟规则发布后不同群体的反应变化。V2 版本内置<b>场景识别引擎</b>：系统会先识别你选择的虚拟社会类型，再解析发布内容属于的<b>规则类别</b>，识别五类影响主体（直接受影响 / 间接受影响 / 管理执行 / 潜在受损 / 高风险行为主体），然后生成<b>贴合该场景的专属分析</b>——不会出现学校场景里冒出补贴、医保等无关词语的串场情况。</p>
+      <div class="mode-grid">
+        <div class="mode-box mode-now">
+          <div class="m-tag">当前模式</div>
+          <h4>独立运行 · 本地规则库推演</h4>
+          <p>8 类虚拟社会 × 44 个规则类别的完整知识库（主体画像、收益 / 成本 / 风险、漏洞表现、双风险链、4 类替代方案、问卷模板）<b>全部内置在本网页文件中</b>。识别、推演、问卷、报告全部在你的浏览器内完成——无需安装任何软件、无需联网、无需智能体接口，双击文件或打开本网址即可完整走通 12 步流程。</p>
+        </div>
+        <div class="mode-box mode-future">
+          <div class="m-tag">扩展入口（预留）</div>
+          <h4>智能体增强模式</h4>
+          <p>本页面已预留标准 HTTP 接口对接位：部署 <b>WorkBuddy 智能体编排层</b>（Planner 任务规划器 + 4 个 MCP Server：社会识别 / 风险链推演 / 漏洞预警 / 方案生成 + LLM API 网关 + 会话持久记忆）后，页面会自动检测并切换为增强模式，获得多步规划反思、调用轨迹展示与云端 LLM 深度分析能力。检测不到智能体接口时，自动回退本地规则库，流程不中断。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="func-grid">
+      <div class="func-card">
+        <div class="f-step">STEP 02-03</div>
+        <div class="f-ico">🏛</div>
+        <h4>创建虚拟社会</h4>
+        <p>选择学校、国家/地区、城市社区、企业组织、电商平台、医疗机构、交通系统、内容/社交平台等 8 种类型，每类社会内置独立的规则类别库与主体画像。</p>
+      </div>
+      <div class="func-card">
+        <div class="f-step">STEP 04</div>
+        <div class="f-ico">🧭</div>
+        <h4>场景识别与主体分析</h4>
+        <p>系统识别规则类别与五类影响主体；输入与所选社会明显不匹配时会提示重新确认，短输入则基于当前社会类型合理推断并明确标注。</p>
+      </div>
+      <div class="func-card">
+        <div class="f-step">STEP 05-10</div>
+        <div class="f-ico">📋</div>
+        <h4>专属问卷与行为推演</h4>
+        <p>问卷题目由「社会类型 + 规则类别 + 发布内容」共同驱动生成；推演按该类别的专属风险链展开，输出主链与备选链两条演化路径。</p>
+      </div>
+      <div class="func-card">
+        <div class="f-step">STEP 11-12</div>
+        <div class="f-ico">📊</div>
+        <h4>方案对比与报告</h4>
+        <p>生成原方案、温和方案、限制方案、试点方案 4 个反事实方案并对比效果，输出可解释分析报告。</p>
+      </div>
+    </div>
+
+    <div class="feature-strip">
+      <span class="feature-chip"><b>V2 新增</b> 规则类别识别（44 类）</span>
+      <span class="feature-chip"><b>V2 新增</b> 五类主体角色识别</span>
+      <span class="feature-chip"><b>V2 新增</b> 类别专属收益/成本/风险</span>
+      <span class="feature-chip"><b>V2 新增</b> 主链 + 备选链双风险链</span>
+      <span class="feature-chip"><b>V2 新增</b> 类型不匹配拦截</span>
+      <span class="feature-chip"><b>V2 新增</b> 短输入推断标注</span>
+    </div>
+
+    <div class="actions btn-center">
+      <button class="btn btn-primary" onclick="goPage(2)">开始创建虚拟社会 →</button>
+    </div>
+  </section>
+
+  <!-- 第2页 选择虚拟社会类型 -->
+  <section class="page" id="page-2">
+    <div class="page-head">
+      <div class="step-tag">STEP 02 / 12 · 创建虚拟社会</div>
+      <h1 class="page-title">请选择要创建的<span class="hl">虚拟社会类型</span></h1>
+      <p class="page-desc">不同社会类型具有不同的<b>主体结构、利益关系和风险来源</b>。系统会根据你的选择自动生成对应群体画像、规则类别库和专属分析指标。</p>
+    </div>
+    <div class="soc-grid" id="socGrid"></div>
+    <div class="note">提示：点击卡片选择一种社会类型。每类社会内置独立规则类别，后续分析只使用该场景的专属词语。</div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(1)">← 返回首页</button>
+      <button class="btn btn-primary" id="btnConfirmSoc" onclick="confirmSociety()" disabled>确认社会类型，进入发布内容 →</button>
+      <span class="hint-next">选择类型后按钮自动激活</span>
+    </div>
+  </section>
+
+  <!-- 第3页 输入发布内容 -->
+  <section class="page" id="page-3">
+    <div class="page-head">
+      <div class="step-tag">STEP 03 / 12 · 输入发布内容</div>
+      <h1 class="page-title">请输入要试运行的<span class="hl">发布内容</span></h1>
+      <p class="page-desc">这里可以输入<b>规则、政策、制度或产品</b>。系统将先识别它属于当前社会中的哪一类规则，再生成专属问卷和推演模型。</p>
+    </div>
+    <div class="card">
+      <h3><span class="ico">✎</span>发布内容</h3>
+      <textarea class="rule-input" id="ruleInput" placeholder="例如：学校将宿舍门禁时间从 22:30 延长到 23:30。" oninput="onRuleInput()"></textarea>
+      <div class="ex-title" id="exTitle">点击示例快速填入：</div>
+      <div class="ex-list" id="exList"></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="ico">⚙</span>补充规则属性（可选，影响推演参数）</h3>
+      <div class="opt-row">
+        <div class="o-label">发布目标</div>
+        <div class="chips" data-group="goal">
+          <span class="chip" onclick="pickChip(this)">提高效率</span>
+          <span class="chip" onclick="pickChip(this)">增加收益</span>
+          <span class="chip" onclick="pickChip(this)">降低风险</span>
+          <span class="chip" onclick="pickChip(this)">提升公平</span>
+          <span class="chip" onclick="pickChip(this)">提高满意度</span>
+        </div>
+      </div>
+      <div class="opt-row">
+        <div class="o-label">发布范围</div>
+        <div class="chips" data-group="scope">
+          <span class="chip" onclick="pickChip(this)">小范围试点</span>
+          <span class="chip" onclick="pickChip(this)">部分群体</span>
+          <span class="chip" onclick="pickChip(this)">全体推行</span>
+        </div>
+      </div>
+      <div class="opt-row">
+        <div class="o-label">规则强度</div>
+        <div class="chips" data-group="strength">
+          <span class="chip" onclick="pickChip(this)">温和</span>
+          <span class="chip" onclick="pickChip(this)">中等</span>
+          <span class="chip" onclick="pickChip(this)">严格</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(2)">← 上一步</button>
+      <button class="btn btn-primary" id="btnAnalyze" onclick="doParse()" disabled>分析发布内容 →</button>
+      <span class="hint-next">输入内容后按钮自动激活</span>
+    </div>
+  </section>
+
+  <!-- 第4页 场景识别与解析 -->
+  <section class="page" id="page-4">
+    <div class="page-head">
+      <div class="step-tag">STEP 04 / 12 · 场景识别与内容解析</div>
+      <h1 class="page-title">系统已识别场景并解析<span class="hl">发布内容</span></h1>
+      <p class="page-desc">系统按「社会类型 → 规则类别 → 五类主体」的顺序进行识别，再生成<b>贴合当前场景</b>的收益、成本、风险与数据需求。</p>
+    </div>
+
+    <div class="parse-hero">
+      <div class="quote-ico">❝</div>
+      <div class="rule-text" id="parseRuleText">—</div>
+      <div class="parse-ok" id="parseOk">✓ 识别完成</div>
+    </div>
+
+    <div class="infer-note" id="inferNote"></div>
+    <div class="soft-note" id="softNote"></div>
+    <div class="mismatch-box" id="mismatchBox"></div>
+
+    <div id="parseContent">
+      <div class="id-banner" id="idBar4"></div>
+      <div class="card">
+        <h3><span class="ico">🔍</span>识别与解析结果</h3>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th style="width:190px">解析项目</th><th>解析结果</th></tr></thead>
+            <tbody id="parseTbody"></tbody>
+          </table>
+        </div>
+        <div class="flex-note"><span class="ico">💡</span><span>识别出的规则类别与五类主体将直接决定第 5 步问卷题目、第 7 步推演群体画像、第 10 步风险链与第 11 步替代方案的生成方向。</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" onclick="goPage(3)">← 修改发布内容</button>
+        <button class="btn btn-primary" onclick="buildQuestionnaire();goPage(5)">生成专属调查问卷 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第5页 生成专属调查问卷 -->
+  <section class="page" id="page-5">
+    <div class="page-head">
+      <div class="step-tag">STEP 05 / 12 · 问卷生成</div>
+      <h1 class="page-title">已生成<span class="hl">专属调查问卷</span></h1>
+      <p class="page-desc">问卷由<b>「社会类型 + 规则类别 + 发布内容」</b>共同驱动生成：收益题、成本题、风险题与漏洞题均来自本场景专属分析结果。</p>
+    </div>
+    <div class="id-banner" id="idBar5"></div>
+    <div class="qn-meta" id="qnMeta"></div>
+    <div id="qnList"></div>
+    <div class="flex-note"><span class="ico">⭐</span><span><b>项目创新点：</b>问卷由发布内容驱动自动生成——不同社会类型、不同规则类别会产生完全不同的题目与选项，且选项中只出现当前场景的专属词语，保证采集数据与待验证的风险假设一一对应。</span></div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="downloadSurvey()">⬇ 下载问卷模板</button>
+      <button class="btn btn-primary" onclick="goPage6FromQn()">导入问卷结果 →</button>
+      <button class="btn btn-amber" onclick="useMockData()">使用模拟数据继续 →</button>
+    </div>
+    <div class="note">「导入问卷结果」进入数据导入页；「使用模拟数据继续」将使用基于本场景群体画像的仿真参数直接进入行为推演。</div>
+  </section>
+
+  <!-- 第6页 导入数据 -->
+  <section class="page" id="page-6">
+    <div class="page-head">
+      <div class="step-tag">STEP 06 / 12 · 数据导入</div>
+      <h1 class="page-title">导入问卷数据或选择<span class="hl">公开数据来源</span></h1>
+      <p class="page-desc">问卷数据用于获得<b>群体态度</b>，公开数据用于提供<b>背景规模和真实性支撑</b>。</p>
+    </div>
+    <div class="id-banner" id="idBar6"></div>
+    <div class="card">
+      <h3><span class="ico">📥</span>问卷数据导入</h3>
+      <div class="import-zone" id="importZone" onclick="document.getElementById('fileInput').click()">
+        <div class="iz-ico">🗂</div>
+        <p>点击或拖拽文件到此处导入问卷结果</p>
+        <div class="formats">支持 Excel 文件（.xlsx / .xls）· CSV 文件 · 问卷星导出数据 · 腾讯问卷导出数据</div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" onchange="onFileChosen(this)">
+      </div>
+      <div class="imported-file" id="importedFile">
+        <span class="ok-ico">✓</span>
+        <span id="importedName">—</span>
+        <span class="rows" id="importedRows"></span>
+      </div>
+      <div class="ex-title">数据导入路径：</div>
+      <div class="pipeline">
+        <span class="pipe-node">问卷结果文件</span><span class="pipe-arrow">→</span>
+        <span class="pipe-node">数据清洗</span><span class="pipe-arrow">→</span>
+        <span class="pipe-node">群体分类</span><span class="pipe-arrow">→</span>
+        <span class="pipe-node">参数提取</span><span class="pipe-arrow">→</span>
+        <span class="pipe-node">行为推演模型</span>
+      </div>
+      <div class="ex-title" style="margin-top:22px">参数转换表（问卷答案 → 推演参数）：</div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>问卷统计项</th><th>转换结果（推演参数）</th><th>作用</th></tr></thead>
+          <tbody>
+            <tr><td>支持比例</td><td><span class="tag tag-blue">初始赞成度</span></td><td>各主体推演起始支持水平</td></tr>
+            <tr><td>反对比例</td><td><span class="tag tag-red">初始反对度</span></td><td>识别潜在冲突主体</td></tr>
+            <tr><td>认为麻烦的人数</td><td><span class="tag tag-amber">成本感知</span></td><td>估计配合度下降幅度</td></tr>
+            <tr><td>认为不公平的人数</td><td><span class="tag tag-violet">公平风险</span></td><td>定位隐性受损主体</td></tr>
+            <tr><td>认为有人会钻漏洞的人数</td><td><span class="tag tag-red">漏洞风险</span></td><td>估计规则被利用的概率</td></tr>
+            <tr><td>愿意改变行为的人数</td><td><span class="tag tag-green">行为变化概率</span></td><td>预测二次反应强度</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3><span class="ico">🌐</span>公开数据来源（背景规模支撑）</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>社会类型</th><th>可用公开数据</th></tr></thead>
+          <tbody id="openDataTbody"></tbody>
+        </table>
+      </div>
+      <div class="note" id="openDataNote"></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(5)">← 上一步</button>
+      <button class="btn btn-primary" id="btnSim" onclick="goPage(7);runSimulation()" disabled>开始行为推演 →</button>
+      <span class="hint-next" id="importHint">请先导入问卷结果文件（或返回上一步选择模拟数据）</span>
+    </div>
+  </section>
+
+  <!-- 第7页 行为推演过程 -->
+  <section class="page" id="page-7">
+    <div class="page-head">
+      <div class="step-tag">STEP 07 / 12 · 行为推演</div>
+      <h1 class="page-title">系统正在进行<span class="hl">虚拟社会行为推演</span></h1>
+      <p class="page-desc">系统将根据<b>本场景的五类主体画像、问卷参数和公开数据</b>，模拟发布内容在虚拟社会中的传播和反馈过程。</p>
+    </div>
+    <div class="id-banner" id="idBar7"></div>
+    <div class="sim-stage">
+      <div class="sim-header">
+        <div class="pulse" id="simPulse"></div>
+        <div class="sim-title" id="simTitle">MULTI-AGENT SIMULATION · 多主体行为推演运行中</div>
+        <div class="sim-pct" id="simPct">0%</div>
+      </div>
+      <div class="sim-sub" id="simSub"></div>
+      <div class="sim-bar"><div class="fill" id="simFill"></div></div>
+      <div class="sim-steps" id="simSteps"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico">📐</span>推演分析维度</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th style="width:130px">分析维度</th><th>系统关注的核心问题</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag tag-blue">赞成度</span></td><td>五类主体是否支持。</td></tr>
+            <tr><td><span class="tag tag-red">反对度</span></td><td>哪些主体可能不满。</td></tr>
+            <tr><td><span class="tag tag-green">行为变化</span></td><td>主体是否改变原有行为。</td></tr>
+            <tr><td><span class="tag tag-amber">漏洞风险</span></td><td>是否可能被钻空子（按本场景漏洞表现评估）。</td></tr>
+            <tr><td><span class="tag tag-violet">公平性风险</span></td><td>是否伤害潜在受损主体。</td></tr>
+            <tr><td><span class="tag tag-red">次生风险</span></td><td>是否引发连锁问题（按本场景风险链评估）。</td></tr>
+            <tr><td><span class="tag tag-blue">执行难度</span></td><td>管理执行主体的实施成本和压力。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(6)">← 上一步</button>
+      <button class="btn btn-primary" id="btnViewResult" onclick="showResults()" disabled>查看推演结果 →</button>
+      <span class="hint-next" id="simHint">推演完成后按钮自动激活</span>
+    </div>
+  </section>
+
+  <!-- 第8页 推演结果总览 -->
+  <section class="page" id="page-8">
+    <div class="page-head">
+      <div class="step-tag">STEP 08 / 12 · 结果总览</div>
+      <h1 class="page-title">虚拟社会<span class="hl">推演结果</span></h1>
+    </div>
+    <div class="id-banner" id="idBar8"></div>
+    <div class="concl-box">
+      <div class="cb-head"><span class="ico">🧭</span><b>总体结论</b></div>
+      <p id="conclText"></p>
+    </div>
+    <div class="metric-grid" id="metricGrid"></div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(7)">← 上一步</button>
+      <button class="btn btn-primary" onclick="goPage(9)">查看主体差异分析 →</button>
+    </div>
+  </section>
+
+  <!-- 第9页 主体差异分析 -->
+  <section class="page" id="page-9">
+    <div class="page-head">
+      <div class="step-tag">STEP 09 / 12 · 主体差异分析</div>
+      <h1 class="page-title">五类主体的<span class="hl">反应差异</span></h1>
+      <p class="page-desc">系统按<b>直接受影响主体、间接受影响主体、管理执行主体、潜在受损主体、高风险行为主体</b>五类角色分别推演，同一规则对不同主体的影响完全不同。</p>
+    </div>
+    <div class="id-banner" id="idBar9"></div>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr><th>主体角色</th><th>典型对象</th><th>态度</th><th class="bar-cell">态度指数</th><th>主要原因</th><th>风险点</th></tr>
+          </thead>
+          <tbody id="groupTbody"></tbody>
+        </table>
+      </div>
+      <div class="flex-note"><span class="ico">⭐</span><span><b>项目创新点：多主体行为推演。</b>系统不是把「民意」当作一个整体，而是识别出五类角色并让它们作为独立主体参与推演，主体之间还会相互影响（如高风险行为主体钻规则空子会挤压直接受影响主体的收益），从而涌现出单一问卷无法发现的群体矛盾。</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(8)">← 上一步</button>
+      <button class="btn btn-primary" onclick="goPage(10)">查看风险链与漏洞预警 →</button>
+    </div>
+  </section>
+
+  <!-- 第10页 风险链与漏洞预警 -->
+  <section class="page" id="page-10">
+    <div class="page-head">
+      <div class="step-tag">STEP 10 / 12 · 风险链与漏洞预警</div>
+      <h1 class="page-title">规则漏洞与<span class="hl">次生风险链</span></h1>
+      <p class="page-desc">系统基于本场景规则类别生成<b>1 条主链 + 1 条备选链</b>，并给出至少 3 条<b>本场景专属</b>的漏洞预警。</p>
+    </div>
+    <div class="id-banner" id="idBar10"></div>
+    <div class="card chain-card">
+      <h4><span class="chain-tag main">主风险链</span>推演识别出的最可能演化路径</h4>
+      <div class="chain-flow" id="mainChain"></div>
+      <h4><span class="chain-tag alt">备选风险链</span>次大概率演化路径</h4>
+      <div class="chain-flow" id="altChain"></div>
+      <div class="note">含义：一项表面「受欢迎」的规则，可能经由资源集中 → 不满累积 → 管理承压的路径演变为规则失败。提前识别链条，就能在关键节点插入干预措施。</div>
+    </div>
+    <div class="card">
+      <h3><span class="ico">🚨</span>本场景漏洞预警</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th style="width:110px">编号</th><th>漏洞表现（当前场景专属）</th><th style="width:150px">预警等级</th></tr></thead>
+          <tbody id="vulnTbody"></tbody>
+        </table>
+      </div>
+      <div class="flex-note"><span class="ico">⭐</span><span><b>项目创新点：规则漏洞预警 + 双风险链生成。</b>漏洞与链条均由「社会类型 × 规则类别」知识库生成，与当前场景严格一致，不混入其他场景的词语。</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(9)">← 上一步</button>
+      <button class="btn btn-primary" onclick="goPage(11)">查看替代方案对比 →</button>
+    </div>
+  </section>
+
+  <!-- 第11页 替代方案对比 -->
+  <section class="page" id="page-11">
+    <div class="page-head">
+      <div class="step-tag">STEP 11 / 12 · 反事实方案对比</div>
+      <h1 class="page-title">反事实方案<span class="hl">对比与优化</span></h1>
+      <p class="page-desc">系统基于当前规则自动生成<b>原方案、温和方案、限制方案、试点方案</b> 4 个反事实方案，并比较不同方案的效果。</p>
+    </div>
+    <div class="id-banner" id="idBar11"></div>
+    <div class="plan-rec" id="planRec"></div>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr><th>方案</th><th>策略说明</th><th>赞成度</th><th>风险</th><th>公平性</th><th>执行难度</th></tr>
+          </thead>
+          <tbody id="planTbody"></tbody>
+        </table>
+      </div>
+      <div class="flex-note"><span class="ico">⭐</span><span><b>项目创新点：反事实替代方案对比。</b>系统对同一目标自动构造「如果换个做法会怎样」的反事实方案，在同等推演模型下比较赞成度、风险、公平性与执行难度，用数据而非直觉选择推行策略。</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="goPage(10)">← 上一步</button>
+      <button class="btn btn-primary" onclick="buildReport();goPage(12)">生成可解释分析报告 →</button>
+    </div>
+  </section>
+
+  <!-- 第12页 可解释分析报告 -->
+  <section class="page" id="page-12">
+    <div class="page-head">
+      <div class="step-tag">STEP 12 / 12 · 可解释分析报告</div>
+      <h1 class="page-title">规则试运行<span class="hl">分析报告</span></h1>
+      <p class="page-desc">报告自动汇总本次试运行的完整结论，每一条建议都对应推演中的<b>可追溯证据</b>。</p>
+    </div>
+    <div class="id-banner" id="idBar12"></div>
+    <div class="report" id="reportBox"></div>
+    <div class="actions">
+      <button class="btn btn-green" onclick="exportReport()">⬇ 导出报告</button>
+      <button class="btn btn-ghost" onclick="goPage(1)">返回首页</button>
+      <button class="btn btn-primary" onclick="restart()">重新创建虚拟社会</button>
+    </div>
+  </section>
+</main>
+
+<footer id="footBar">
+  <span>规则沙盒 V2 · 场景识别与专属分析</span>
+  <span style="margin-left:auto">流程进度</span>
+  <span class="f-step" id="footStep">1 / 12</span>
+</footer>
+
+<script>
+/* ================================================================
+   场景知识库：8 类虚拟社会 × 44 个规则类别
+   每个类别含：识别关键词、主体覆盖、专属收益/成本/风险/漏洞、双风险链、方案说明
+   规则：所有条目只使用当前场景词语，禁止跨场景串词
+   ================================================================ */
+const SOC = [
+{id:"school", ico:"🎓", name:"学校型社会",
+ app:"适用于宿舍门禁、图书馆预约、课程调整、校园管理等",
+ data:"学校通知、图书馆使用记录、教务信息",
+ links:[["教育部政务数据（政策与校园管理通知）","https://www.moe.gov.cn/"],["中国教育和科研计算机网（高校资源数据）","https://www.edu.cn/"],["中国教育在线（教育统计与资讯）","https://www.eol.cn/"]],
+ scope:"宿舍楼栋 / 试点院系",
+ groups:"学生、教师、辅导员、宿管人员、教务处、图书馆管理人员、学校保卫处、社团组织、家长",
+ subj:{d:"学生（特别是与该规则直接相关的学生）", i:"教师、社团组织、其他学生", m:"宿管人员、辅导员、教务处、学校保卫处", v:"作息规律的学生、家长关注度高的学生", h:"高频使用相关资源的学生"},
+ cats:[
+  {name:"宿舍管理类", desc:"宵禁、门禁、晚归登记、外宿报备、宿舍检查、访客管理",
+   kw:["门禁","宵禁","晚归","外宿","宿舍","查寝","访客","归宿","熄灯","断电","宿管"],
+   subs:{d:"住校学生", v:"作息规律、需要早睡的学生", h:"习惯晚归或希望外宿的学生"},
+   benefit:["学生自由度提高","作息安排更灵活","宿舍管理流程更清晰","学生满意度提高","减少不必要的管理冲突"],
+   cost:["宿管人员工作量增加","夜间巡查压力增加","辅导员沟通成本增加","校园安全责任上升","学生理解规则成本增加"],
+   risk:["晚归噪声与作息冲突","长期外宿管理失序","晚归登记失真","家长担忧上升","安全责任不清"],
+   vuln:["借规则放宽长期外宿","晚归登记失真","替他人报备或代刷门禁"],
+   chain:["部分学生获得更大的夜间自由","习惯晚归的学生开始频繁晚归","宿舍作息受干扰、楼内噪声增加","作息规律的学生满意度下降","宿管登记与巡查压力上升","投诉与家长质询增加"],
+   alt:["个别学生借门禁放宽长期外宿","夜间在寝率下降","安全事件责任界定困难","学校被迫收紧规则","学生认为朝令夕改、信任下降"],
+   lim:"为晚归设置登记上限与外宿报备审核（如每月次数上限）",
+   soft:"分时段放宽（仅周末、考试周延长门禁），并保留夜间安静公约"},
+  {name:"学习资源类", desc:"图书馆预约、自习室开放、实验室使用、课程安排、早八课程、选课规则",
+   kw:["预约","图书馆","自习室","实验室","课程","选课","早八","占座","课时","排课"],
+   subs:{d:"使用图书馆、自习室等资源的学生", v:"高峰时段抢不到资源的学生", h:"长期占用座位或资源的学生"},
+   benefit:["学习资源使用更灵活","公共资源利用率提升","教学安排更人性化","学生自主学习空间增加","预约流程更清晰"],
+   cost:["公共资源维护成本上升","图书馆管理人员工作量增加","教学排课复杂度增加","爽约治理成本增加","设备损耗加快"],
+   risk:["资源被长期占用","爽约频发","占座争议","预约数据造假","高峰期资源紧张引发公平性质疑"],
+   vuln:["重复预约座位","长期占用自习空间","替人签到占位"],
+   chain:["部分学生获得更长的资源使用时间","高频使用者长期占用座位与自习空间","高峰期其他学生约不到座位","资源公平性争议与投诉增加","图书馆被迫引入违约治理","管理成本上升"],
+   alt:["预约与实际到场脱节、爽约增多","高峰时段座位空置与紧张并存","学生对预约制度信任下降","规则被迫频繁调整"],
+   lim:"设置单次使用时长上限，爽约累计扣减预约资格",
+   soft:"先小幅延长预约时长并动态评估占用率，再决定是否全面延长"},
+  {name:"校园秩序类", desc:"请假制度、考勤制度、校园出入、社团活动审批、活动场地预约",
+   kw:["请假","考勤","出入","审批","活动","场地","门岗","校园卡","签到"],
+   benefit:["校园管理流程更清晰","学生办事效率提升","活动组织更有序","责任划分更明确","校园秩序满意度提升"],
+   cost:["辅导员审批工作量增加","审批流程学习成本增加","活动组织准备周期变长","门岗核验压力上升","跨部门协调成本增加"],
+   risk:["考勤造假","审批绕流程","活动积压","学生对繁琐流程产生抵触","执行不一致引发争议"],
+   vuln:["活动审批绕流程","替人签到","请假材料包装"],
+   chain:["审批流程调整","部分社团为赶时间绕过审批","场地冲突与安全隐患出现","学校被迫收紧审批","合规社团的活动空间反而被压缩"],
+   alt:["请假与考勤规则调整","学生为规避扣分弄虚作假","考勤数据失真","辅导员需逐例核查","沟通成本大幅上升"],
+   lim:"对高频请假、预约设置分级审核与次数上限",
+   soft:"简化低风险事项流程，仅对高风险事项保留严格审批"},
+  {name:"学生评价类", desc:"综测、奖学金、绩点、评优评先、处分规则",
+   kw:["综测","奖学金","绩点","评优","评先","处分","加分","德育","保研"],
+   subs:{d:"参评学生", v:"不擅长材料包装的踏实学生", h:"围绕加分指标突击包装的学生"},
+   benefit:["评价标准更透明","激励导向更明确","学生发展路径更清晰","评优争议减少","公平感知提升"],
+   cost:["材料评审工作量增加","学生准备材料成本增加","加分核验成本上升","争议申诉处理成本增加","院系口径统一成本增加"],
+   risk:["评优争议","综测材料包装","加分信息不透明","学生相互举报增加","评价标准变动引发不信任"],
+   vuln:["综测材料包装","评奖信息不透明","突击参加可加分活动"],
+   chain:["评价规则调整","学生聚焦可量化加分项","非量化但重要的贡献被忽视","材料包装与突击加分泛滥","评价结果公信力下降","申诉与争议大幅增加"],
+   alt:["加分口径理解不一致","各院系执行标准出现差异","学生跨院系比较后感到不公","规则被迫二次解释"],
+   lim:"对加分项设置材料核验与公示期",
+   soft:"新旧规则并行一个学期，过渡期评价只升不降"},
+  {name:"后勤服务类", desc:"食堂、洗浴、快递、校园卡、维修、校车",
+   kw:["食堂","洗浴","快递","校园卡","维修","校车","后勤","水电","浴室"],
+   benefit:["校园生活便利性提升","服务响应更快","资源调度更合理","学生满意度提高","排队等待减少"],
+   cost:["后勤人员工作量增加","设备维护成本上升","服务管理成本增加","高峰调度压力上升","外包监管成本增加"],
+   risk:["排队集中","服务差错增加","高峰拥堵","设备故障响应不及","学生对调整产生不满"],
+   vuln:["代占排队名额","批量代领快递","报修信息虚报"],
+   chain:["服务规则调整","高峰时段需求集中","排队与等待时间上升","学生转向投诉与网络吐槽","后勤增派人手、成本上升"],
+   alt:["部分服务点人流下降、另一些过载","资源配置错配","学生体验不稳定","服务布点被迫二次调整"],
+   lim:"对高频服务（如快递、洗浴）实行预约分流与错峰开放",
+   soft:"先在部分宿舍楼或食堂窗口试点，收集使用数据后再推广"},
+  {name:"安全管理类", desc:"夜间巡查、校外住宿、校门进出、突发事件报备",
+   kw:["巡查","校门","进出","报备","突发事件","消防","治安","保卫"],
+   benefit:["校园安全水平提升","突发事件响应更快","家长信任度提高","安全责任更清晰","隐患发现更及时"],
+   cost:["保卫处巡查压力增加","进出门核验时间增加","报备流程管理成本上升","夜间人手成本增加","设备与监控成本上升"],
+   risk:["报备流于形式","核验拥堵","执行不一致","学生为省事绕行规避","安全责任界定争议"],
+   vuln:["借他人证件进出","突发事件报备不实","巡查记录补签"],
+   chain:["进出管控收紧","进出门核验时间上升","高峰期校门拥堵","部分学生借他人证件规避","门禁数据失真","安全研判依据失效"],
+   alt:["报备流程增加","学生为省事瞒报","突发事件时信息不完整","处置延误","学校进一步收紧管控"],
+   lim:"对夜间进出与外宿报备设置阈值触发复核",
+   soft:"以教育提醒代替刚性处罚，先观察一个月违规率"}
+ ]},
+
+{id:"country", ico:"🏛", name:"国家/地区型社会",
+ app:"适用于公共政策、补贴制度、交通规则、就业政策等",
+ data:"国家统计局、政府报告、行业白皮书",
+ links:[["国家统计局（统计公报与宏观数据）","https://www.stats.gov.cn/"],["中国政府网（政府工作报告）","https://www.gov.cn/"],["中国信通院（行业白皮书）","https://www.caict.ac.cn/"]],
+ scope:"试点城市 / 部分地区",
+ groups:"青年群体、中年家庭、老年群体、低收入群体、企业主体、个体经营者、政府部门、公共服务机构、纳税人",
+ subj:{d:"政策目标群体（青年、中年家庭、老年群体等）", i:"纳税人、普通公众、公共服务机构", m:"政府部门、基层执行机构", v:"政策边缘群体、数字能力较弱的老年群体", h:"资格包装者、中介代办机构"},
+ cats:[
+  {name:"补贴政策类", desc:"购车补贴、住房补贴、生育补贴、就业补贴、消费券",
+   kw:["补贴","消费券","购车","住房","生育","就业补贴","券","扶持资金"],
+   subs:{d:"符合申领条件的目标群体", v:"政策边缘群体、数字能力弱的老人", h:"资格包装者、中介代办"},
+   benefit:["重点群体获得实质支持","消费与生育意愿改善","产业发展需求被带动","政策公信力提升","社会公平感知增强"],
+   cost:["财政支出增加","基层审核压力增加","资格核验成本上升","政策宣传成本增加","兑付流程运维成本增加"],
+   risk:["骗补","资格包装","地区不公平","弱势群体遗漏","政策寻租"],
+   vuln:["虚假申报","重复领取补贴","中介代办套利"],
+   chain:["补贴发布","资格门槛成为套利焦点","部分主体包装资格、批量申领","补贴资金流向偏离目标群体","舆论质疑政策公平","审核全面收紧、真实申请人负担增加"],
+   alt:["部分地区执行口径不一","跨地区套利出现","财政压力超预期","政策被迫分批缩减"],
+   lim:"设置申领频次上限，跨部门数据核验资格",
+   soft:"降低门槛简化流程，辅以事后抽查追回"},
+  {name:"税费调整类", desc:"个税、企业税、社保缴费、公共服务收费",
+   kw:["个税","税","社保","缴费","收费","税率","扣除","减税"],
+   benefit:["纳税人负担减轻","可支配收入增加","企业成本下降","合规预期更稳定","征管流程更清晰"],
+   cost:["财政收入短期承压","税务系统调整成本","企业合规改造成本","政策理解成本增加","基层辅导成本上升"],
+   risk:["政策理解偏差","申报口径不一","短期市场波动","征管争议增加","地区执行差异"],
+   vuln:["收入拆分避税","虚报专项扣除","钻申报口径空子"],
+   chain:["税费调整","扣除口径成为焦点","部分纳税人包装扣除项","申报数据异常增长","税务加强核查","全社会合规成本上升"],
+   alt:["执行细则滞后","各地口径不一","纳税人跨区域比较后集中争议","政策被迫打补丁"],
+   lim:"对高风险扣除项设置证明材料与事后核查",
+   soft:"分档逐步实施，先小幅度调整再扩大"},
+  {name:"就业民生类", desc:"就业扶持、最低工资、养老服务、教育资源配置",
+   kw:["就业","最低工资","养老","教育","岗位","培训","民生","托育"],
+   benefit:["就业机会增加","重点群体获得扶持","公共服务覆盖扩大","劳动关系更规范","长期民生保障提升"],
+   cost:["政策执行成本增加","基层经办压力上升","企业用工成本上升","培训组织成本增加","监管核查成本上升"],
+   risk:["资格审查流于形式","扶持岗位空转","企业负担过重","地区执行差异","目标群体错位"],
+   vuln:["虚假就业登记","培训刷课时","套取就业扶持"],
+   chain:["就业扶持发布","以就业名义申领扶持的项目增多","部分岗位空转、数据注水","真实就业改善不及预期","考核收紧后短期数据回落"],
+   alt:["企业为达标突击招聘","岗位质量不高、流动加快","政策效果被质疑","补充细则密集出台"],
+   lim:"对扶持对象设置在岗时长与真实性核验",
+   soft:"先在就业压力大的地区试点，逐步扩围"},
+  {name:"公共安全类", desc:"实名制、出入境、防灾应急、食品安全",
+   kw:["实名","出入境","防灾","应急","食品安全","治安","安检"],
+   benefit:["公共安全提升","风险溯源能力增强","应急响应更快","公众安全感提高","治理数据基础更扎实"],
+   cost:["公众登记与适应成本增加","执法与核查成本上升","基层执行压力增加","系统建设成本上升","跨部门数据共享协调成本上升"],
+   risk:["登记信息泄露担忧","执行层层加码","公众抵触","隐私争议","便利性下降引发抱怨"],
+   vuln:["借用他人身份登记","代办实名规避","登记信息造假"],
+   chain:["实名要求发布","使用他人身份登记的需求上升","登记数据与实际行为脱节","安全事件溯源失败","管控进一步收紧"],
+   alt:["基层为免责扩大执行范围","公众体验下降、抵触情绪上升","合规率反而下降","规则被迫回摆"],
+   lim:"对高风险场景实名、低风险场景抽检",
+   soft:"设置过渡期与宣传辅导，先引导后处罚"},
+  {name:"环保治理类", desc:"限塑、限行、碳排放、能源补贴",
+   kw:["限塑","碳排放","环保","能源","排放","限排","绿色"],
+   benefit:["环境质量改善","绿色行为获得激励","长期治理效率提高","产业绿色转型加速","公众环保意识提升"],
+   cost:["企业合规成本上升","公众生活便利性下降","监管执法成本增加","替代品成本上升","产业调整阵痛"],
+   risk:["区域执行差异","替代需求集中","公众短期不便引发抱怨","部分企业负担过重","替代品质量参差"],
+   vuln:["虚报排放数据","跨区域规避","替代品以次充好"],
+   chain:["环保规则发布","规避成本低于合规成本","跨区域规避与替代品泛滥","政策效果打折","监管加码、执法成本上升"],
+   alt:["部分行业获得豁免","公平性争议出现","政策严肃性受损","真正转型企业积极性下降"],
+   lim:"对豁免与例外情形设置公示和总量上限",
+   soft:"先覆盖公共机构与大型企业，再逐步覆盖全社会"},
+  {name:"社会保障类", desc:"医保、养老、失业保险、救助政策",
+   kw:["医保","养老","失业","救助","保险","报销","保障","低保"],
+   benefit:["保障覆盖扩大","抗风险能力提升","困难群体获得兜底","社会预期更稳定","公共服务均等化推进"],
+   cost:["基金支出压力增加","经办审核成本上升","异地协查成本增加","骗保治理成本上升","系统运维成本增加"],
+   risk:["基金穿底压力","骗保行为增加","异地执行差异","经办误伤真实需求","待遇口径争议"],
+   vuln:["重复参保报销","虚假材料套取待遇","代办套取救助"],
+   chain:["保障待遇调整","报销与救助口径成为焦点","虚假材料与代办套利增加","基金监管收紧","真实困难群体审核变慢、被误伤"],
+   alt:["各地执行标准不一","跨地区待遇差异显现","争议集中爆发","统一口径被迫重新发布"],
+   lim:"对高额与高频待遇申请设置复核与总量管理",
+   soft:"待遇小幅分步上调，并保留人工通道兜底"}
+ ]},
+
+{id:"community", ico:"🏘", name:"城市社区型社会",
+ app:"适用于停车、物业、公共资源预约、社区治理等",
+ data:"政府公开数据、社区公告、物业统计",
+ links:[["上海市公共数据开放平台","https://data.sh.gov.cn/"],["北京市政务数据资源网","https://data.beijing.gov.cn/"],["住房和城乡建设部（物业与社区政策）","https://www.mohurd.gov.cn/"]],
+ scope:"部分小区 / 试点楼栋",
+ groups:"居民、业主、租户、商户、物业、社区工作人员、老人、儿童家庭、访客、外卖快递人员",
+ subj:{d:"居民、业主、租户", i:"商户、访客、外卖快递人员", m:"物业、社区工作人员", v:"老人、儿童家庭", h:"长期占用公共资源者"},
+ cats:[
+  {name:"停车管理类", desc:"停车收费、车位预约、临停限制、外来车辆管理",
+   kw:["停车","车位","临停","车辆","车库","占位","月租"],
+   subs:{d:"有停车需求的业主与租户", v:"晚归业主、无固定车位者", h:"长期占用公共车位者"},
+   benefit:["停车秩序改善","车位周转率提升","外来车辆管理更清晰","业主停车更容易","小区通行更顺畅"],
+   cost:["物业执行压力增加","收费与识别设备维护成本上升","居民适应成本增加","访客登记管理成本上升","执法协调成本增加"],
+   risk:["停车争议","邻里冲突","访客管理混乱","商户客流下降","长期占位"],
+   vuln:["长期占用公共车位","借用他人停车资格","临停规则钻空子"],
+   chain:["停车规则调整","部分车主长期占位","车位周转下降","晚归业主无处停车","投诉与占位冲突增加","物业增派人手、矛盾升级"],
+   alt:["收费或限制提高","部分车辆转移到周边道路","周边拥堵、邻里投诉","规则被迫再次调整"],
+   lim:"对单次临停时长与每月免费次数设置上限",
+   soft:"先在矛盾集中的楼栋试点错时共享车位"},
+  {name:"物业服务类", desc:"物业费、维修规则、公共区域使用、垃圾分类",
+   kw:["物业费","维修","公共区域","垃圾分类","物业","保洁","公摊"],
+   benefit:["物业服务效率提升","公共区域维护更好","缴费与权责更清晰","社区环境改善","报修响应更快"],
+   cost:["物业执行压力增加","设备维护成本上升","居民适应成本增加","沟通协调成本上升","公示与审计成本增加"],
+   risk:["物业与业主矛盾","缴费争议","服务标准理解不一","公共区域私用","维修响应争议"],
+   vuln:["物业收费不透明","公共区域私用","维修申报虚报"],
+   chain:["物业规则调整","费用与服务标准争议出现","部分业主拒缴","物业降低服务","服务与收费螺旋恶化","业委会与物业对峙"],
+   alt:["信息公示不足","业主质疑收费合理性","矛盾累积","大规模欠费与更换物业风波"],
+   lim:"对收费标准与公共收益设置公示和审计",
+   soft:"新旧标准并行一个季度，分项收费、按需选择"},
+  {name:"公共空间类", desc:"广场活动、健身设施、儿童区域、宠物管理",
+   kw:["广场","健身","儿童","宠物","公共空间","活动区","噪声","遛狗"],
+   benefit:["公共资源使用更公平","活动更有秩序","儿童与老人活动更安全","邻里关系改善","设施损耗更可控"],
+   cost:["场地维护成本上升","管理巡逻成本增加","活动审批沟通成本增加","设施更新成本上升","活动冲突调解成本增加"],
+   risk:["邻里冲突","夜间噪声投诉","宠物伤人争议","儿童设施争抢","场地被长期占用"],
+   vuln:["公共区域私用","宠物管理规避","设施长期占用"],
+   chain:["空间使用规则调整","高需求群体占用高峰时段","其他群体被挤出","使用冲突与投诉增加","社区介入调解、成本上升"],
+   alt:["执行主体缺位","规则形同虚设","违规常态化","再修正时阻力更大"],
+   lim:"对高峰使用实行分时段预约与人数上限",
+   soft:"先以公约引导，观察一个季度的违规情况"},
+  {name:"社区服务类", desc:"老人服务、便民窗口、快递柜、社区团购",
+   kw:["老人","便民","快递柜","团购","助老","服务窗口","社区食堂"],
+   subs:{v:"老人、不熟悉线上操作的居民", h:"代占服务名额者"},
+   benefit:["居民生活便利性提升","老人服务覆盖扩大","快递收取更安全有序","社区凝聚力提高","服务响应更快"],
+   cost:["老人数字化使用门槛提高","服务点运营成本上升","志愿者与管理人手不足","设备维护成本增加","服务信息安全保护成本上升"],
+   risk:["老人使用不便","服务名额被挤占","快递柜拥堵","团购售后纠纷","服务覆盖不均"],
+   vuln:["代占服务名额","批量代领快递","团购售后钻空子"],
+   chain:["服务规则调整","会操作者批量占用名额","老人等弱势群体使用率下降","服务公平性被质疑","需增设人工兜底、成本上升"],
+   alt:["线上渠道顺畅、线下渠道萎缩","数字能力弱的群体被边缘化","投诉集中在服务可及性","被迫恢复双轨服务"],
+   lim:"对高频服务设置实名限领与人工配额",
+   soft:"保留线下登记双通道，逐步引导线上化"},
+  {name:"安全秩序类", desc:"门禁、访客登记、消防通道、夜间噪声",
+   kw:["门禁","访客","消防","夜间","治安","登记","门岗"],
+   benefit:["社区安全管理更清晰","访客进出可追溯","消防隐患减少","居民安全感提升","突发事件响应更快"],
+   cost:["门禁设备维护成本上升","物业核验压力增加","访客通行时间增加","高峰期人手成本上升","访客信息管理与保护成本上升"],
+   risk:["访客管理混乱","邻里不满","外卖快递人员与门禁冲突","登记失真","消防通道回潮占用"],
+   vuln:["借用他人门禁","访客登记失真","消防通道被占用回潮"],
+   chain:["门禁收紧","访客通行成本上升","外卖快递集中卡点、冲突增加","居民与骑手双重投诉","物业加派人手、执行成本上升"],
+   alt:["登记流于形式","数据不可信","安全事件时追溯失败","管控再次收紧"],
+   lim:"对夜间访客与批量来访设置分级登记",
+   soft:"先宣传引导并在高峰期协助核验，暂不处罚"}
+ ]},
+
+{id:"company", ico:"🏢", name:"企业组织型社会",
+ app:"适用于绩效制度、管理规则、组织调整、新产品策略等",
+ data:"企业年报、行业报告、市场研究报告",
+ links:[["巨潮资讯网（上市公司年报）","https://www.cninfo.com.cn/"],["国家企业信用信息公示系统","https://www.gsxt.gov.cn/"],["艾瑞咨询（行业研究报告）","https://www.iresearch.cn/"]],
+ scope:"试点部门 / 部分团队",
+ groups:"基层员工、中层管理者、高层决策者、HR、财务部门、销售团队、技术团队、客户、合作方、投资者",
+ subj:{d:"基层员工、相关团队", i:"客户、合作方、其他部门", m:"管理层、HR、财务部门", v:"不擅长量化指标的员工、转型期员工", h:"掌握考核数据或客户资源的员工"},
+ cats:[
+  {name:"绩效考核类", desc:"KPI、OKR、末位淘汰、奖金分配、晋升机制",
+   kw:["绩效","KPI","OKR","末位","考核","奖金","晋升","指标","淘汰"],
+   subs:{d:"被考核的员工与团队", v:"不擅长量化指标的员工、支撑型岗位", h:"掌握考核数据或客户资源的员工"},
+   benefit:["组织效率提升","目标更聚焦","优秀员工获得激励","管理透明度提升","资源向高产出倾斜"],
+   cost:["员工压力增加","指标设计与维护成本上升","评审沟通成本增加","考核系统建设成本增加","跨部门校准成本上升"],
+   risk:["内卷","绩效数据造假","只追短期指标","团队协作下降","员工抵触"],
+   vuln:["绩效数据包装","选择性完成容易量化的任务","团队内部甩锅"],
+   chain:["考核规则发布","员工聚焦可量化指标","难量化但重要的协作被忽视","指标美化与内部竞争增加","协作氛围恶化、离职率上升","制度被迫重新设计"],
+   alt:["部门间指标口径不一","横向比较引发不公感","申诉与博弈增加","管理层大量时间用于校准指标"],
+   lim:"对关键指标引入交叉验证与数据抽查",
+   soft:"降低指标权重、增加协作维度，过渡期不与薪酬强挂钩"},
+  {name:"考勤管理类", desc:"打卡、远程办公、弹性工作、加班规则",
+   kw:["打卡","考勤","远程","弹性","加班","工时","在线时长"],
+   benefit:["工时管理更清晰","远程协作更规范","员工自主性提升","加班更可控","管理预期更一致"],
+   cost:["监督系统成本上升","管理层核查成本增加","员工信任成本增加","制度沟通成本上升","制度调整适应期效率损失"],
+   risk:["虚假加班","形式化打卡","员工感到被监控","弹性被滥用","信任度下降"],
+   vuln:["虚假加班打卡","代打卡","远程在线但低效"],
+   chain:["考勤规则发布","部分员工形式化打卡应付","管理层加强抽查","员工感到不被信任、抵触上升","监督成本与离职风险同步上升"],
+   alt:["弹性被少数人滥用","管理层全面收紧","真正自律的员工体验受损","核心人才流失"],
+   lim:"对异常考勤设置阈值复核，而非全量监控",
+   soft:"以结果考核为主、考勤为辅，先在试点团队推行"},
+  {name:"组织调整类", desc:"部门合并、岗位调整、流程再造",
+   kw:["部门","合并","岗位","调整","流程","重组","架构","裁员"],
+   benefit:["决策链路缩短","资源集中使用","流程更清晰","跨部门协作效率提高","组织敏捷性提升"],
+   cost:["员工适应成本增加","培训成本上升","沟通成本增加","交接期效率下降","关键人才保留成本上升"],
+   risk:["部门利益冲突","人才流失","客户服务断层","执行混乱","员工抵触"],
+   vuln:["借调整推诿职责","流程过渡期钻空子","关键岗位信息截留"],
+   chain:["组织调整发布","职责边界出现模糊地带","事项在部门间推诿","客户与跨部门协作受阻","二次明确权责、调整成本追加"],
+   alt:["核心骨干在不确定中选择离职","项目连续性受损","调整目标落空","被迫再次重组"],
+   lim:"设置过渡期双签机制，明确交接清单",
+   soft:"先合并试点流程、保留原架构，观察一个季度"},
+  {name:"产品策略类", desc:"新产品发布、价格调整、会员制度、售后政策",
+   kw:["新品","价格","会员","售后","产品","发布","调价","服务包"],
+   benefit:["客户满意度提升","产品竞争力增强","收入结构优化","品牌预期更清晰","客户生命周期价值提升"],
+   cost:["培训成本上升","售后体系改造成本增加","客户沟通成本增加","渠道适应成本上升","过渡期补贴成本增加"],
+   risk:["老客户不满","价格争议","售后纠纷增加","渠道窜货","品牌信任波动"],
+   vuln:["利用新旧政策衔接套利","批量囤积低价权益","借调价窗口期囤货转售"],
+   chain:["产品策略发布","新旧权益衔接出现价差","部分客户批量囤积旧权益","收入与库存预测失真","被迫设置追溯限制","客户体验受损"],
+   alt:["一线销售人员理解不一致","客户获得矛盾答复","信任下降、投诉上升","紧急培训与口径统一成本激增"],
+   lim:"对权益叠加与转售设置限制条款",
+   soft:"老客户保留原权益，新客户执行新策略"},
+  {name:"激励机制类", desc:"提成、股权激励、团队奖励、项目奖金",
+   kw:["提成","股权","激励","奖金池","项目奖","分红","期权"],
+   benefit:["员工积极性提高","核心人才保留","目标与回报更明确","组织活力提升","战略项目获得资源"],
+   cost:["激励成本上升","核算复杂度增加","部门间攀比与博弈","评审成本增加","长期摊销压力上升"],
+   risk:["只追短期业绩","团队分配争议","跨部门抢单","激励套利","战略任务无人认领"],
+   vuln:["抢接易达标任务","奖金核算口径套利","突击冲刺刷数据"],
+   chain:["激励规则发布","高回报项目被集中抢接","长期但低回报任务无人认领","团队协作与战略任务受损","规则被迫补充分配细则"],
+   alt:["核算口径存在模糊","各团队自利解读","分配争议爆发","管理层公信力受损"],
+   lim:"对激励口径设置事前公示与争议裁决机制",
+   soft:"先小奖金池试运行，跑通核算后再放量"},
+  {name:"风险合规类", desc:"审批流程、报销制度、客户数据安全",
+   kw:["审批","报销","合规","数据安全","内控","审计","权限"],
+   benefit:["风险更可控","审计留痕完整","责任界定清晰","合规文化增强","监管预期更稳定"],
+   cost:["审批链路变长","短期执行效率下降","系统改造成本上升","培训成本增加","合规人员编制增加"],
+   risk:["员工抵触","审批积压","形式化合规","一线绕流程","跨区域合规差异"],
+   vuln:["报销套利","拆分审批规避权限","借紧急通道绕审"],
+   chain:["合规规则发布","审批链路变长","一线为赶进度拆单绕审","合规数据失真","审计发现问题后全面收紧","效率进一步下降"],
+   alt:["审批积压","业务部门与合规部门对立","高层出面协调","规则频繁打补丁"],
+   lim:"按金额与风险分级审批，小额快审",
+   soft:"先在风险最高的领域试点，其余暂维持原流程"}
+ ]},
+
+{id:"ecom", ico:"🛒", name:"电商平台型社会",
+ app:"适用于退货规则、优惠券、会员制度、物流补贴等",
+ data:"平台公开报告、行业研究报告",
+ links:[["网经社（电子商务研究中心报告）","https://www.100ec.cn/"],["阿里研究院（平台经济报告）","https://www.aliresearch.com/"],["中国消费者协会（投诉与消费数据）","https://www.cca.org.cn/"]],
+ scope:"部分品类 / 灰度用户组",
+ groups:"普通消费者、价格敏感型用户、会员用户、商家、平台运营、客服、物流、售后团队、薅羊毛群体",
+ subj:{d:"普通消费者、会员用户", i:"商家、物流", m:"平台运营、客服、售后团队", v:"不熟悉平台规则的消费者、中小商家", h:"薅羊毛群体、批量账号操作者"},
+ cats:[
+  {name:"优惠促销类", desc:"优惠券、满减、补贴、会员权益、秒杀",
+   kw:["优惠券","满减","补贴","秒杀","会员权益","促销","折扣","券"],
+   subs:{d:"普通消费者、价格敏感型用户", h:"薅羊毛群体、批量账号操作者"},
+   benefit:["用户下单意愿提升","平台交易额增长","会员黏性增强","滞销库存被消化","新用户获取效率提升"],
+   cost:["平台补贴成本增加","商家利润下降","客服工单增加","风控审核成本上升","活动运维成本增加"],
+   risk:["薅羊毛","商家先涨后降","正常用户抢不到","优惠规则争议","投诉增加"],
+   vuln:["批量注册账号领券","优惠券叠加套利","凑单后退款"],
+   chain:["优惠规则发布","薅羊毛群体批量注册叠加领券","补贴资金被非目标用户消耗","真实用户的优惠名额被挤占","舆情发酵、平台口碑受损","规则紧急打补丁"],
+   alt:["商家为对冲成本先涨后降","用户比价后信任下降","大促效果不及预期","营销费用被迫追加"],
+   lim:"对券叠加、领取频次与退款返券设置限制",
+   soft:"小额券灰度放量，按核销率逐步加码"},
+  {name:"售后退货类", desc:"退货期限、运费险、仅退款、售后审核",
+   kw:["退货","退款","运费险","仅退款","售后","7天","15天","期限","退换"],
+   subs:{d:"消费者、会员用户", v:"不熟悉售后规则的消费者、中小商家", h:"恶意退货、批量凑单退款者"},
+   benefit:["售后体验改善","下单决策门槛降低","复购率提升","平台信任度提升","纠纷处理更规范"],
+   cost:["售后压力上升","逆向物流成本增加","商家利润被侵蚀","审核人力成本上升","赔付成本增加"],
+   risk:["凑单退款","恶意退货","仅退款滥用","商家流失","误伤正常用户"],
+   vuln:["凑单后退款","恶意仅退款","利用运费险套利"],
+   chain:["退货规则放宽","凑单退款行为增加","商家利润与库存周转承压","商家提价或退出","正常用户的购买成本上升"],
+   alt:["恶意仅退款集中爆发","商家批量申诉","平台人工审核激增","处理时效下降、买卖双方都不满"],
+   lim:"对高频退货账号设置风控与权益降级",
+   soft:"先对低客单品类放宽，并保留人工复核通道"},
+  {name:"商家治理类", desc:"保证金、处罚规则、流量分配、评价机制",
+   kw:["保证金","处罚","流量分配","评价","商家","违规","扣分","店铺"],
+   subs:{v:"中小商家、新入驻商家", h:"换店重开、刷评价的违规商家"},
+   benefit:["平台生态更健康","优质商家获得曝光","消费者权益更有保障","劣质商家被出清","长期经营预期更稳定"],
+   cost:["商家合规成本上升","平台审核成本增加","商家流失风险","申诉处理成本上升","治理工具开发成本增加"],
+   risk:["商家流失","误伤中小商家","评价机制被利用","商家向平台外引流","平台供给多样性下降"],
+   vuln:["刷好评","虚假评价报复对手","换店重开规避处罚"],
+   chain:["治理规则收紧","部分中小商家被误伤或退出","品类供给减少、价格上升","消费者选择变少","平台生态活力下降"],
+   alt:["处罚标准执行不一","商家质疑选择性执法","集体申诉与舆情爆发","平台公信力受损"],
+   lim:"对处罚设置分级与申诉复核期",
+   soft:"先警告整改，观察期后再实质处罚"},
+  {name:"推荐机制类", desc:"首页推荐、搜索排序、直播流量、广告投放",
+   kw:["推荐","排序","流量","首页","直播","广告","算法","搜索"],
+   subs:{v:"中小商家、新商家", h:"研究排序规则批量优化的运营号"},
+   benefit:["优质商品获得曝光","用户找到目标商品更快","广告转化提升","平台调性提升","商品与用户匹配度提高"],
+   cost:["运营与优化成本上升","审核压力增加","算法调试成本增加","商家投流成本上升","用户数据合规成本上升"],
+   risk:["流量垄断","算法偏见","中小商家被降权","用户活跃下降","舆论争议"],
+   vuln:["钻排序规则堆砌关键词","批量账号引流","标题党商品"],
+   chain:["推荐规则调整","头部商家研究规则获得超额曝光","中小商家流量下滑","供给多样性下降","用户可选择性变少、活跃下降"],
+   alt:["商家围绕新指标堆砌关键词","推荐质量下降","用户点击率下滑","算法被迫频繁迭代"],
+   lim:"对头部曝光占比设置上限，保留新商家流量位",
+   soft:"新旧排序并行 AB 测试，用数据决定切换"},
+  {name:"物流服务类", desc:"包邮规则、配送时效、延迟赔付",
+   kw:["包邮","配送","时效","延迟","赔付","物流","快递","揽收"],
+   benefit:["配送体验改善","用户下单意愿提升","商家履约更规范","平台口碑提升","物流合作生态更稳"],
+   cost:["物流成本增加","赔付成本上升","商家利润下降","高峰运力压力上升","客服咨询量增加"],
+   risk:["高峰爆仓","赔付纠纷","时效不达标","商家虚假发货","物流投诉集中"],
+   vuln:["虚假发货","利用延迟赔付条款套利","批量下单骗取赔付"],
+   chain:["时效承诺发布","高峰期运力不足","延迟集中爆发","赔付申请激增","商家与平台成本上升","时效承诺被迫下调"],
+   alt:["商家为达标选择高价物流","成本转嫁到商品价格","用户比价后流失","订单量下滑"],
+   lim:"对赔付设置单量与金额阈值，防止批量套利",
+   soft:"按区域分批承诺时效，运力数据达标后再扩围"},
+  {name:"用户风控类", desc:"账号限制、异常订单识别、刷单治理",
+   kw:["账号","限制","异常订单","刷单","风控","封号","黑名单"],
+   subs:{v:"被误伤的正常用户", h:"批量养号者、刷单团伙"},
+   benefit:["交易环境更安全","恶意行为减少","正常用户权益更有保障","平台生态更公平","营销资源不被浪费"],
+   cost:["风控系统成本上升","申诉处理成本增加","误伤处理成本上升","模型迭代成本增加","用户教育沟通成本上升"],
+   risk:["正常用户被误伤","申诉无门","用户流失","黑产转移升级","舆情风险"],
+   vuln:["批量养号规避识别","借用他人账号下单","申诉材料造假"],
+   chain:["风控规则收紧","黑产转向批量养号与真人众包","识别难度上升","误伤率上升","正常用户申诉激增、口碑受损"],
+   alt:["处罚不可申诉","用户在社交媒体集中吐槽","舆情压力增大","规则被迫增加申诉通道"],
+   lim:"对处罚设置阶梯式（提醒、限权、封禁）",
+   soft:"先限权观察并保留申诉通道，谨慎使用封禁"}
+ ]},
+
+{id:"medical", ico:"🏥", name:"医疗机构型社会",
+ app:"适用于挂号规则、医保报销、检查预约、医疗资源分配等",
+ data:"卫健委数据、医院年报、医保数据",
+ links:[["国家卫生健康委员会（卫生健康统计）","https://www.nhc.gov.cn/"],["国家医疗保障局（医保政策与数据）","https://www.nhsa.gov.cn/"],["健康界（医院管理与年报资讯）","https://www.cn-healthcare.com/"]],
+ scope:"部分科室 / 试点院区",
+ groups:"普通患者、老年患者、慢病患者、急诊患者、医生、护士、医院管理者、医保部门、陪护家属、黄牛",
+ subj:{d:"患者（普通、老年、慢病、急诊）", i:"陪护家属、其他候诊患者", m:"医生、护士、医院管理者", v:"老年患者、不熟悉线上操作的慢病患者", h:"黄牛、代抢号者"},
+ cats:[
+  {name:"挂号预约类", desc:"线上挂号、专家号限制、实名制、预约取消规则",
+   kw:["挂号","专家号","预约","实名","取消","号源","线上预约","放号"],
+   subs:{d:"需要挂号的患者", v:"老年患者、不熟悉线上操作的慢病患者", h:"黄牛、代抢号者"},
+   benefit:["排队时间减少","就医效率提升","号源分配更透明","医生排班更有序","现场秩序改善"],
+   cost:["老年患者操作难度增加","系统维护成本上升","窗口人力配置调整","退号治理成本增加","导诊人力成本上升"],
+   risk:["黄牛抢号","老年人被排除","线上系统拥堵","患者投诉增加","爽约率高"],
+   vuln:["代抢专家号","虚假取消重约","冒用身份挂号"],
+   chain:["全部线上预约发布","熟练操作者与代抢更快占号","老年患者与现场患者挂不到号","公平性投诉集中","医院增设人工兜底、管理成本上升"],
+   alt:["黄牛利用批量工具抢号","号源被加价转卖","患者对实名制信任下降","强制核验收紧、就医流程更繁琐"],
+   lim:"对取消重约设置冷却期，同一证件号限挂",
+   soft:"保留部分现场号源与人工窗口，分步上线"},
+  {name:"分诊排队类", desc:"检查预约、候诊排序、急诊分流",
+   kw:["分诊","候诊","排队","急诊","检查预约","叫号"],
+   benefit:["候诊秩序改善","急重症优先得到保障","检查资源利用率提升","医患沟通预期更明确","检查预约爽约率下降"],
+   cost:["分诊人员培训成本增加","患者解释沟通成本上升","系统改造费用增加","高峰疏导人力增加","分诊标准统一培训成本上升"],
+   risk:["急重症识别不足","候诊争议","插队冲突","投诉增加","高峰时段过载"],
+   vuln:["虚报病情插队","检查预约爽约后重复占位","重复挂号占用号源"],
+   chain:["分诊规则调整","界定标准理解不一","轻症患者钻空子插队","真正急重症患者等待延长","分诊被迫加强人工复核、效率下降"],
+   alt:["高峰时段检查预约爆满","患者反复改约","号源周转下降","医患矛盾集中在等候区爆发"],
+   lim:"对加急申请设置分级核准与留痕",
+   soft:"高峰增开绿色通道，实行分时段预约"},
+  {name:"医保报销类", desc:"报销比例、药品目录、异地医保",
+   kw:["医保","报销","比例","目录","异地","结算"],
+   benefit:["患者负担减轻","报销流程更规范","基金使用更可持续","异地就医更便利","重复报销与套用行为减少"],
+   cost:["医保审核压力上升","医院结算系统改造成本","患者材料准备成本增加","经办窗口压力上升","医院与医保对账成本上升"],
+   risk:["医保滥用","报销口径争议","异地结算差异","误伤真实患者","基金监管争议"],
+   vuln:["重复开药套报销","医保套用","虚假异地就医备案"],
+   chain:["报销规则调整","报销口径成为焦点","部分患者重复开药、套用额度","医保基金监管收紧","真实患者审核变慢、体验下降"],
+   alt:["各地执行细则不一","患者跨地比较待遇","争议集中爆发","统一口径被迫重新发布"],
+   lim:"对高频开药与异地备案设置数据比对",
+   soft:"先在常见慢病病种试点，简化报销材料"},
+  {name:"医疗资源类", desc:"床位安排、手术排期、专家门诊",
+   kw:["床位","手术","排期","专家门诊","资源","加床"],
+   benefit:["资源分配更清晰","等待预期更明确","周转率提升","重症优先得到保障","资源使用透明度提升"],
+   cost:["排期协调成本上升","医患沟通成本增加","应急调配压力上升","管理信息系统成本增加","跨科室协调成本上升"],
+   risk:["排期争议","加床失控","重症识别偏差","医患矛盾","寻租质疑"],
+   vuln:["借急诊名义插队","手术排期加塞","床位信息不透明"],
+   chain:["排期规则发布","加急需求集中于个别通道","部分患者借急诊占位","真正急症患者被延后","医疗风险与投诉同步上升"],
+   alt:["床位信息公开不足","患者托关系打听","寻租空间形成","制度公信力受损"],
+   lim:"对加急与占位设置公开排队与复核",
+   soft:"分档公开排期进度，保留机动床位应急"},
+  {name:"服务流程类", desc:"自助机、线上问诊、报告查询、陪护管理",
+   kw:["自助机","线上问诊","报告","陪护","自助","流程","缴费"],
+   subs:{v:"老年患者、不熟悉自助设备的患者", h:"代刷问诊、代查报告者"},
+   benefit:["就医流程更顺畅","重复往返减少","报告获取更便捷","陪护管理更安全","院内人流分布更均衡"],
+   cost:["自助设备维护成本上升","老年患者引导人力增加","线上问诊质控成本增加","窗口双轨运行成本上升","系统切换期双轨运维成本上升"],
+   risk:["老年患者不会用","自助机排长队","线上问诊质量参差","陪护登记冲突","设备故障时服务中断"],
+   vuln:["陪护登记失真","线上问诊刷单","代查报告"],
+   chain:["自助流程推广","自助机成为唯一快捷通道","老年患者聚集在自助机前求助","人工窗口压力回升、排队双轨化","医院需增设引导员、成本上升"],
+   alt:["线上问诊需求激增","医生碎片化回复、质量下降","患者投诉问诊无效","线上渠道被迫收缩"],
+   lim:"对线上问诊设置接诊上限与质控抽查",
+   soft:"保留人工双轨，逐步引导自助"}
+ ]},
+
+{id:"traffic", ico:"🚦", name:"交通系统型社会",
+ app:"适用于限行、停车收费、地铁预约、公交线路调整等",
+ data:"交通运输部门数据、城市交通报告",
+ links:[["交通运输部（交通运输统计数据）","https://www.mot.gov.cn/"],["公安部（道路交通安全管理）","https://www.mps.gov.cn/"],["百度地图慧眼（城市交通报告）","https://huiyan.baidu.com/"]],
+ scope:"试点路段 / 部分线路",
+ groups:"通勤者、私家车主、公交乘客、地铁乘客、出租车司机、网约车司机、交通管理部门、商圈经营者、居民",
+ subj:{d:"通勤者、私家车主", i:"商圈经营者、沿线居民", m:"交通管理部门", v:"不开车的老人、依赖公交的通勤者", h:"职业跑单司机、惯常违停者"},
+ cats:[
+  {name:"限行收费类", desc:"限行、拥堵费、停车费、路桥费",
+   kw:["限行","拥堵费","停车费","路桥费","单双号","尾号","限号"],
+   subs:{d:"私家车主、通勤者", v:"绕行成本高的居民、依赖公交的通勤者", h:"绕行规避、套牌套资格者"},
+   benefit:["拥堵缓解","道路资源分配更合理","公共交通客流提升","出行结构改善","高峰通行效率提升"],
+   cost:["车主出行成本上升","执法成本上升","收费系统建设成本增加","公共交通运力补强成本上升","政策宣传与过渡期引导成本"],
+   risk:["拥堵转移","绕行规避","执行争议","商圈客流下降","居民投诉"],
+   vuln:["绕行规避收费","套用车牌资格","临停规则钻空子"],
+   chain:["限行收费发布","部分车主绕行规避","拥堵转移至周边道路","周边居民投诉上升","限行范围被迫扩大、争议再起"],
+   alt:["违规成本与收费成本失衡","高峰违停与套牌增加","执法投入上升","通行秩序反而恶化"],
+   lim:"对豁免车辆设置公示名录与配额",
+   soft:"先高峰时段限行、平峰不限，逐步过渡"},
+  {name:"公共交通类", desc:"地铁预约、公交线路调整、班次变化",
+   kw:["地铁","公交","班次","线路","地铁预约","接驳","运力"],
+   subs:{d:"地铁乘客、公交乘客", v:"依赖固定线路的通勤者与老人", h:"批量代抢预约名额者"},
+   benefit:["公共交通效率提升","客流更均衡","运力利用更充分","乘客体验改善","换乘衔接更顺"],
+   cost:["调度与排班成本增加","高峰运力压力上升","站点疏导人力增加","线路调整宣传成本增加","临时调度与应急疏导成本"],
+   risk:["公共交通过载","高峰拥挤加剧","客流转移","候车时间波动","乘客投诉"],
+   vuln:["套用预约资格","批量代抢预约名额","冒用他人预约码"],
+   chain:["公共交通规则调整","客流向高峰线路集中","车厢与站台过载","疏导压力与安全风险上升","被迫限流、体验下降"],
+   alt:["线路调整信息触达不足","乘客按旧习惯候车","误乘与投诉集中","紧急增开接驳补位"],
+   lim:"对预约名额设置单账号上限与实名",
+   soft:"新线路试运行与旧线并行一个月，再逐步切换"},
+  {name:"停车管理类", desc:"车位预约、临停限制、违停处罚",
+   kw:["车位预约","违停","临停","停车场","占道","泊位"],
+   subs:{d:"私家车主、通勤者", v:"短时办事车主、无车位资源者", h:"惯常违停者、长期占位者"},
+   benefit:["停车秩序改善","车位周转提升","路侧通行更顺畅","寻位时间减少","违停投诉下降"],
+   cost:["执法成本上升","收费系统运维成本增加","车主停车成本上升","标识改造费用增加","僵尸车清理处置成本"],
+   risk:["违停增加","停车难转移","商圈客流下降","执行争议","僵尸车占用"],
+   vuln:["长期占位","套用停车资格","虚假月租登记"],
+   chain:["停车规则收紧","车主为省费用选择路侧违停","通行受阻、投诉上升","执法加码","车流向更远区域扩散"],
+   alt:["周边免费区域被长期占位","居民停车更难","对政策反对声音集中","规则被迫再次调整"],
+   lim:"对临停设置时长上限与阶梯收费",
+   soft:"先在核心路段试点并设置过渡期提示"},
+  {name:"共享出行类", desc:"共享单车投放、电子围栏、骑行规范",
+   kw:["共享单车","电子围栏","投放","骑行","单车","还车"],
+   subs:{d:"通勤接驳用户", v:"不熟悉还车规则的用户", h:"乱停规避围栏者"},
+   benefit:["接驳更便利","乱停乱放减少","慢行秩序改善","企业调度更精细","路面占用下降"],
+   cost:["企业运维成本上升","电子围栏建设成本增加","清运调度人力增加","重点区域管理成本上升","潮汐点位应急清运成本上升"],
+   risk:["乱停回潮","潮汐堆积","骑行安全争议","投放配额冲突","还车纠纷"],
+   vuln:["共享单车乱停规避围栏","虚假停放照片","套用投放配额"],
+   chain:["电子围栏发布","高峰潮汐点位堆积","用户无处还车、罚则争议","用户转向乱停或弃用","秩序目标落空"],
+   alt:["投放配额收紧","高峰通勤段一车难求","找车难与还车难并存","企业与城市双向承压"],
+   lim:"对违规停放设置信用分与调度响应时限",
+   soft:"先在重点商圈划设推荐停车区，暂不处罚"},
+  {name:"安全治理类", desc:"酒驾检查、骑行头盔、路口通行规则",
+   kw:["酒驾","头盔","路口","安全","通行规则","检查","执法"],
+   benefit:["出行安全提升","事故率下降","路口通行更有序","执法预期更明确","交通违法率整体下降"],
+   cost:["执法成本上升","公众适应成本增加","教育宣传投入增加","检测设备成本上升","执法设备与检测点建设成本"],
+   risk:["执行争议","检测点拥堵","公众抵触","地区标准不一","选择性执法质疑"],
+   vuln:["绕行逃避检查","套牌规避识别","临检时段钻空子"],
+   chain:["安全规则发布","部分驾驶者绕行逃避检查点","事故风险转移至监管薄弱路段","安全收益打折","检查范围被迫扩大"],
+   alt:["处罚严厉但宣传不足","公众为避罚抢行、路口更乱","执法争议上升","配套教育被迫补位"],
+   lim:"对重点时段与路段设常态化抽查，而非运动式执法",
+   soft:"先教育警告期，再逐步转入处罚"}
+ ]},
+
+{id:"content", ico:"📱", name:"内容/社交平台型社会",
+ app:"适用于推荐机制、审核规则、评论治理、流量分配等",
+ data:"平台治理报告、用户研究报告",
+ links:[["国家互联网信息办公室（网络生态治理）","https://www.cac.gov.cn/"],["中国互联网络信息中心 CNNIC（用户研究报告）","https://www.cnnic.net.cn/"],["国家广播电视总局（网络视听数据）","https://www.nrta.gov.cn/"]],
+ scope:"部分内容分区 / 灰度用户组",
+ groups:"普通用户、内容创作者、平台审核员、广告主、意见领袖、MCN机构、未成年用户、争议话题参与者",
+ subj:{d:"普通用户、内容创作者", i:"广告主、MCN机构、意见领袖", m:"平台审核员", v:"未成年用户、小体量创作者", h:"灰产账号运营者、争议话题操盘者"},
+ cats:[
+  {name:"推荐机制类", desc:"流量分配、算法推荐、热门排序",
+   kw:["推荐","流量分配","算法","热门","排序","首页","feed"],
+   subs:{d:"内容创作者、普通用户", v:"小体量创作者、新创作者", h:"研究算法批量优化的灰产运营者"},
+   benefit:["内容质量提升","优质创作者获得曝光","用户沉浸体验更好","内容生态更健康","内容与用户匹配度提高"],
+   cost:["算法调试成本增加","审核压力增加","创作者流量预期波动","运营解释成本上升","创作者生态维护成本上升"],
+   risk:["流量垄断","算法偏见","小体量创作者流失","用户活跃下降","舆论争议"],
+   vuln:["钻排序规则堆砌关键词","批量账号引流","标题党适配算法"],
+   chain:["推荐规则调整","头部与机构化创作者研究规则适配","流量进一步集中","小体量创作者弃更、内容多样性下降","用户兴趣衰减、活跃下滑"],
+   alt:["创作者围绕新指标批量转型","内容同质化","用户审美疲劳","平台被迫再次调整算法"],
+   lim:"对头部流量占比设置上限，保留新人扶持池",
+   soft:"新旧推荐并行 AB 测试，逐步放量"},
+  {name:"内容审核类", desc:"低质内容处罚、敏感内容限制、评论治理",
+   kw:["处罚","审核","敏感","评论治理","低质","封禁","删评"],
+   subs:{d:"内容创作者、普通用户", v:"容易被误伤的垂类创作者、未成年用户", h:"标题党、伪原创搬运者"},
+   benefit:["内容质量提升","社区氛围改善","优质内容获得空间","平台治理更有序","审核标准透明度提升"],
+   cost:["审核压力增加","误伤申诉成本增加","创作者创作压力上升","用户表达空间变窄","审核口径统一培训成本"],
+   risk:["正常内容被误伤","创作者流失","用户活跃下降","舆论争议","低质内容迁移"],
+   vuln:["标题党规避审核","搬运内容伪原创","控评"],
+   chain:["处罚规则收紧","标题党与伪原创规避审核","误伤与漏判并存","创作者申诉激增","审核人力与舆情压力同步上升"],
+   alt:["创作者为避险减少创作","内容供给下降","用户活跃下滑","平台被迫放宽口径回摆"],
+   lim:"对处罚设置分级、申诉复核与缓冲期",
+   soft:"先限流提示，观察整改情况后再处罚"},
+  {name:"创作者激励类", desc:"收益分成、流量扶持、原创保护",
+   kw:["收益分成","流量扶持","原创","激励","补贴","创作奖金"],
+   subs:{d:"内容创作者", v:"小体量原创作者", h:"搬运伪原创号、批量低质号"},
+   benefit:["优质创作者获得激励","原创保护增强","创作意愿提升","内容供给增加","生态正循环形成"],
+   cost:["平台运营成本增加","原创认定审核成本上升","分成规则维护复杂","激励资金监管成本上升","分成规则迭代沟通成本"],
+   risk:["搬运伪原创泛滥","激励向头部集中","非创作者蹭激励","分成争议","低质内容供给增加"],
+   vuln:["搬运内容伪原创","刷互动数据骗扶持","批量低质号套激励"],
+   chain:["激励规则发布","搬运与低质号批量套取扶持","原创作者流量被稀释","优质供给者退出","激励资金效率持续下降"],
+   alt:["激励向头部集中","中腰部创作者收益下滑","创作积极性下降","平台内容供给萎缩"],
+   lim:"对扶持设置原创核验与账号历史门槛",
+   soft:"先小流量池试投放，按互动质量动态加码"},
+  {name:"用户治理类", desc:"账号封禁、实名制、未成年人保护",
+   kw:["账号封禁","实名","未成年人","保护","封号","禁言"],
+   subs:{d:"普通用户、内容创作者", v:"未成年用户、身份认证困难的用户", h:"灰产账号运营者"},
+   benefit:["未成年人保护增强","恶意账号减少","社区更安全","用户信任提升","投诉与举报处理量下降"],
+   cost:["实名核验成本上升","申诉处理成本增加","误伤处理成本上升","隐私合规成本上升","未成年人识别技术成本上升"],
+   risk:["正常用户被误伤","未成年人绕过限制","灰产转移升级","隐私争议","灰产转向更隐蔽的规避手段"],
+   vuln:["灰产账号规避封禁","批量养号","借用成年人身份绕过未成年人保护"],
+   chain:["用户治理收紧","灰产转向批量养号与身份借用","治理成本上升","误伤率随之上升","正常用户申诉与舆情压力增加"],
+   alt:["实名与隐私边界引发争议","部分用户弃用","活跃结构恶化","规则被迫细化分级"],
+   lim:"对封禁设置阶梯处罚与申诉复核",
+   soft:"先限制功能观察，保留申诉通道"},
+  {name:"商业化规则类", desc:"广告投放、直播带货、付费内容",
+   kw:["广告","直播带货","付费内容","商业化","投放","带货"],
+   subs:{d:"内容创作者、广告主", v:"小体量创作者、普通用户", h:"软文伪装、虚假宣传操盘者"},
+   benefit:["广告转化提升","创作者变现渠道更多","平台收入结构更健康","付费内容质量获得倒逼提升","商业内容标识更清晰"],
+   cost:["审核与合规成本增加","用户体验维护成本上升","广告主沟通成本增加","售后纠纷处理成本上升","带货售后保障体系建设成本"],
+   risk:["用户体验下降","广告争议","带货售后纠纷","付费内容质量争议","创作者商业化失衡"],
+   vuln:["虚假宣传钻审核空子","低质付费内容割韭菜","软文伪装成正常内容"],
+   chain:["商业化规则发布","软广伪装成正常内容逃避标注","用户信任下降","广告转化率下滑","平台被迫加强标注审核、成本上升"],
+   alt:["头部带货集中","长尾创作者变现困难","内容生态两极分化","用户付费意愿整体下降"],
+   lim:"对商业内容设置强制标注与售后保证金",
+   soft:"按品类分批开放，先在高信任品类试点"}
+ ]}
+];
+/* ================================================================
+   流程状态与工具
+   ================================================================ */
+const STEP_NAMES = ["首页","选择社会类型","输入发布内容","场景识别解析","生成问卷","导入数据","行为推演","结果总览","主体差异","风险链预警","方案对比","分析报告"];
+
+const state = {
+  page:1, soc:null, content:"", goal:"提高满意度", scope:"部分群体", strength:"中等",
+  visited:new Set([1]), simDone:false, dataSource:"",
+  cat:null, catSoc:null, matchedKw:null, inferred:false, pendingDet:null,
+  qn:null, recPlan:"试点方案"
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const socOf = id => SOC.find(s=>s.id===id);
+
+const RSB = {online:false, base:""};
+/* API_BASE 候选列表：部署后端后把第一项替换为真实公网地址，如 https://xxx.onrender.com
+   "" = 同源（后端托管本页时自动生效）；127.0.0.1 = 本地双击打开页面时连本地后端 */
+const API_BASE_CANDIDATES = ["https://your-backend-url.com", "", "http://127.0.0.1:8017"];
+function apiUrl(p){ return (RSB.base || "") + p; }
+async function apiGet(p){ const r = await fetch(apiUrl(p), {method:"GET"}); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
+async function apiPost(p, body){ const r = await fetch(apiUrl(p), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
+async function probeBackend(){
+  let h = null;
+  for(const base of API_BASE_CANDIDATES){
+    try{
+      const cand = await Promise.race([
+        fetch(base + "/api/health", {method:"GET"}).then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP "+r.status))),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")), 4000))
+      ]);
+      if(cand && cand.status === "ok"){ h = cand; RSB.base = base; RSB.online = true; break; }
+    }catch(e){ continue; }
+  }
+  if(!RSB.online){ RSB.base = ""; }
+  const b = $("apiBadge");
+  if(b){
+    b.className = "api-badge " + (RSB.online ? "on" : "off");
+    if(RSB.online){
+      b.textContent = "智能体增强模式 · MCP × 4 · " + (h.llm_mode === "llm_api" ? "LLM 网关" : "规则引擎");
+      b.title = "已检测到智能体编排接口（" + (RSB.base || "同源") + "），本次分析将由 Planner + 4 个 MCP Server 完成，并保留会话记忆。";
+    }else{
+      b.textContent = "独立演示版 · 本地规则库推演";
+      b.title = "未检测到智能体接口，已自动使用网页内置本地规则库分析——8 类社会 × 44 规则类别全部内置，无需任何外部依赖。";
+    }
+  }
+  const ab = $("agentBadge");
+  if(ab){
+    if(RSB.online){
+      ab.className = "api-badge on";
+      ab.textContent = "智能体增强模式 · 已接入 ↗";
+      ab.title = "已接入智能体编排层（" + (RSB.base || "同源") + "）：Planner 任务规划 + 4 个 MCP Server + LLM 网关，实现实时智能分析与会话持久记忆。";
+    }else{
+      ab.className = "api-badge pending";
+      ab.textContent = "智能体增强模式（待接入）";
+      ab.title = "系统当前可独立运行；后续可接入 WorkBuddy 智能体编排层 / MCP Server / 云端 API，实现实时智能分析与会话记忆。";
+    }
+  }
+}
+
+/* ================================================================
+   第2页：选择虚拟社会
+   ================================================================ */
+function renderSocGrid(){
+  $("socGrid").innerHTML = SOC.map(s => `
+    <div class="soc-card ${state.soc===s.id?"selected":""}" onclick="selectSoc('${s.id}')">
+      <div class="check">✓</div>
+      <div class="s-head"><div class="s-ico">${s.ico}</div><h4>${s.name}</h4></div>
+      <div class="s-app">${s.app}</div>
+      <div class="s-cats"><b>内置规则类别（${s.cats.length} 类）：</b>${s.cats.map(c=>c.name).join(" · ")}</div>
+    </div>`).join("");
+}
+function selectSoc(id){
+  state.soc = id;
+  renderSocGrid();
+  $("btnConfirmSoc").disabled = false;
+  const s = socOf(id);
+  $("topSocietyName").textContent = s.name + "（" + s.ico + "）";
+  $("topSociety").classList.add("show");
+  renderExamples();
+}
+function confirmSociety(){ if(state.soc) goPage(3); }
+function renderExamples(){
+  const s = socOf(state.soc);
+  const exs = {
+    school:["学校将宿舍门禁时间从 22:30 延长到 23:30","学校将图书馆预约时间从 2 小时延长到 4 小时","学校取消宿舍宵禁","学校综测新增志愿服务加分项"],
+    country:["市里对二孩家庭发放育儿补贴","个税起征点提高并扩大专项扣除","新能源购车补贴延长一年","灵活就业人员纳入社保覆盖"],
+    community:["小区公共车位改为计时收费","物业调整公共维修基金使用规则","小区宠物出行须登记并牵绳","小区门禁升级为人脸识别"],
+    company:["公司实行新的绩效奖励制度","公司推行末位淘汰考核","公司允许每周两天远程办公","公司调整提成分配比例"],
+    ecom:["平台将退货期限从 7 天延长到 15 天","平台大促发放满减优惠券","平台收紧商家虚假发货处罚","平台搜索排序规则调整"],
+    medical:["医院专家号全部改为线上预约","医院检查预约改为分时段放号","医院收紧异地医保备案审核","医院上线线上问诊服务"],
+    traffic:["市区恢复尾号限行政策","地铁高峰时段实行预约进站","路边临停改为阶梯收费","重点商圈周边加强违停处罚"],
+    content:["内容平台提高低质内容处罚力度","平台调整创作者收益分成比例","平台对带货直播实行保证金制度","平台加强未成年人使用限制"]
+  }[state.soc];
+  $("exTitle").textContent = "点击示例快速填入（贴合「" + s.name + "」场景）：";
+  $("exList").innerHTML = exs.map(e=>`<button class="ex-btn" onclick="fillExample(this)">${e}</button>`).join("");
+  const phEl = $("ruleInput");
+  if(phEl) phEl.placeholder = "例如：" + exs[0] + "。";
+}
+
+/* ================================================================
+   第3页：输入
+   ================================================================ */
+function fillExample(btn){ $("ruleInput").value = btn.textContent.trim(); onRuleInput(); }
+function onRuleInput(){ $("btnAnalyze").disabled = !$("ruleInput").value.trim(); }
+function pickChip(el){
+  const g = el.parentElement;
+  g.querySelectorAll(".chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  state[g.dataset.group] = el.textContent.trim();
+}
+
+/* ================================================================
+   场景识别引擎（核心）
+   步骤：1识别社会类型 → 2识别规则类别 → 3识别五类主体 → 4生成专属分析
+   ================================================================ */
+function detect(){
+  const t = state.content;
+  const cur = socOf(state.soc);
+  const curHits = [];
+  cur.cats.forEach(c=>c.kw.forEach(k=>{ if(t.includes(k)) curHits.push({cat:c, kw:k}); }));
+  let bestCat = null, bestCount = 0, bestKw = null;
+  cur.cats.forEach(c=>{
+    const hits = curHits.filter(h=>h.cat===c);
+    if(hits.length > bestCount){ bestCount = hits.length; bestCat = c; bestKw = hits[0].kw; }
+  });
+  let otherBest = null;
+  SOC.forEach(s=>{
+    if(s.id === state.soc) return;
+    let n = 0, example = null;
+    s.cats.forEach(c=>c.kw.forEach(k=>{ if(t.includes(k)){ n++; if(!example) example = {cat:c, kw:k}; } }));
+    if(n > 0 && (!otherBest || n > otherBest.count)) otherBest = {soc:s, count:n, ...example};
+  });
+  return {cur, bestCat, bestKw, otherBest};
+}
+
+async function doParse(){
+  state.content = $("ruleInput").value.trim();
+  if(RSB.online){
+    try{
+      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null});
+      if(res.status === "mismatch"){ applyRemoteMismatch(res); return; }
+      if(res.status === "ok"){ applyRemoteAnalysis(res); return; }
+    }catch(e){ console.warn("后端分析失败，回退本地引擎:", e); }
+  }
+  localParse();
+}
+function localParse(){
+  const det = detect();
+  $("parseRuleText").textContent = "“" + state.content + "”";
+  $("mismatchBox").classList.remove("show");
+  $("inferNote").classList.remove("show");
+  $("softNote").classList.remove("show");
+  $("parseContent").style.display = "";
+  $("parseOk").textContent = "✓ 识别完成";
+
+  if(det.bestCat){
+    renderParse(det, false);
+    if(det.otherBest) $("softNote").classList.add("show");
+    goPage(4);
+  } else if(det.otherBest && det.otherBest.count >= 2){
+    state.pendingDet = det;
+    renderMismatch(det);
+    goPage(4);
+  } else {
+    renderParse(det, true);
+    goPage(4);
+  }
+}
+
+function applyRemoteMismatch(res){
+  const sug = res.suggested;
+  const soc = socOf(sug.society_id);
+  state.pendingDet = {cur: socOf(state.soc), otherBest: {soc: soc, cat: (soc.cats.find(c=>c.name===sug.category_name) || soc.cats[0]), kw: sug.kw, count: sug.count}};
+  $("parseRuleText").textContent = "“" + state.content + "”";
+  $("parseOk").textContent = "⚠ 需要确认类型";
+  $("inferNote").classList.remove("show");
+  $("softNote").classList.remove("show");
+  $("parseContent").style.display = "";
+  renderMismatch(state.pendingDet);
+  goPage(4);
+}
+
+function applyRemoteAnalysis(res){
+  const a = res.analysis;
+  state.remote = a;
+  state.sessionId = res.session_id;
+  const s = socOf(a.society.id);
+  state.soc = s.id; state.catSoc = s;
+  state.cat = s.cats.find(x=>x.name===a.category.name) || s.cats[0];
+  state.matchedKw = a.identification.matched_kw; state.inferred = a.identification.inferred;
+  $("parseRuleText").textContent = "“" + state.content + "”";
+  $("parseOk").textContent = "✓ 识别完成 · 后端 MCP 流水线";
+  $("mismatchBox").classList.remove("show");
+  $("inferNote").classList.remove("show");
+  $("softNote").classList.remove("show");
+  const o = a.identification.other_society;
+  const det = {cur: s, bestCat: state.cat, bestKw: state.matchedKw,
+    otherBest: o ? {soc: socOf(o.society_id), cat: (socOf(o.society_id).cats.find(x=>x.name===o.category_name) || socOf(o.society_id).cats[0]), kw: o.kw, count: o.count} : null};
+  renderIdBanner();
+  renderParseTable(det, state.inferred);
+  $("parseContent").style.display = "";
+  goPage(4);
+}
+
+function renderMismatch(det){
+  $("parseOk").textContent = "⚠ 需要确认类型";
+  const ob = det.otherBest;
+  $("mismatchBox").innerHTML = `
+    <h3>⚠️ 发布内容与当前社会类型明显不匹配</h3>
+    <p>你选择的虚拟社会类型是「<b>${det.cur.ico} ${det.cur.name}</b>」，但发布内容的关键词（如「<b>${esc(ob.kw)}</b>」）与当前社会的全部 ${det.cur.cats.length} 个规则类别<b>均不匹配</b>，反而与「<b>${ob.soc.ico} ${ob.soc.name}</b>」的「<b>${ob.cat.name}</b>」高度匹配（命中 ${ob.count} 个关键词）。</p>
+    <div class="ms-sug">系统不会强行生成与当前场景无关的分析结果。请选择：<br>
+      ① 切换为「${ob.soc.name}」并重新分析（推荐）；<br>
+      ② 仍按「${det.cur.name}」基于其典型场景进行<b>推断式分析</b>（结果将明确标注「基于当前社会类型的推断」）；<br>
+      ③ 返回修改发布内容，或回到第 2 步重新选择社会类型。</div>
+    <div class="ms-actions">
+      <button class="btn btn-primary" onclick="switchAndParse('${ob.soc.id}')">切换为「${ob.soc.name}」并重新分析</button>
+      <button class="btn btn-amber" onclick="forceInferParse()">仍按当前类型推断分析</button>
+      <button class="btn btn-ghost" onclick="goPage(3)">← 返回修改发布内容</button>
+    </div>`;
+  $("mismatchBox").classList.add("show");
+  $("parseContent").style.display = "none";
+}
+async function switchAndParse(id){
+  state.soc = id;
+  renderSocGrid();
+  const s = socOf(id);
+  $("topSocietyName").textContent = s.name + "（" + s.ico + "）";
+  $("mismatchBox").classList.remove("show");
+  if(RSB.online){ await doParse(); return; }
+  $("parseContent").style.display = "";
+  renderParse(detect(), false);
+  goPage(4);
+}
+async function forceInferParse(){
+  if(RSB.online){
+    try{
+      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null, allow_inference: true});
+      if(res.status === "ok"){ applyRemoteAnalysis(res); return; }
+    }catch(e){ console.warn("后端推断分析失败，回退本地引擎:", e); }
+  }
+  const det = state.pendingDet || detect();
+  $("mismatchBox").classList.remove("show");
+  $("parseContent").style.display = "";
+  renderParse(det, true);
+  goPage(4);
+}
+
+function renderParse(det, inferred){
+  const cur = det.cur;
+  const cat = inferred ? cur.cats[0] : det.bestCat;
+  state.cat = cat;
+  state.catSoc = cur;
+  state.matchedKw = inferred ? null : det.bestKw;
+  state.inferred = inferred;
+  renderIdBanner();
+  renderParseTable(det, inferred);
+}
+
+function renderIdBanner(){
+  const s = state.catSoc, c = state.cat;
+  const html = `
+    <div class="ib-top">
+      <span class="ib-label">系统识别</span>
+      <span class="ib-main">${s.ico} ${s.name}<span class="sep">›</span>规则类别：${c.name}</span>
+      ${state.inferred
+        ? '<span class="id-badge infer">推断模式 · 以下为基于当前社会类型的推断</span>'
+        : '<span class="id-badge high">高置信 · 关键词「' + esc(state.matchedKw) + '」匹配</span>'}
+    </div>
+    <div class="ib-body">
+      <span>影响主体（五类）：<b>直接受影响 / 间接受影响 / 管理执行 / 潜在受损 / 高风险行为</b></span>
+      <span>分析口径：仅使用「${s.name}」场景专属词语</span>
+    </div>`;
+  [4,5,6,7,8,9,10,11,12].forEach(n=>{ const el=$("idBar"+n); if(el){ el.innerHTML = html; el.classList.add("show"); } });
+}
+
+function renderParseTable(det, inferred){
+  const s = state.catSoc, c = state.cat, t = state.content;
+  const subs = Object.assign({}, s.subj, c.subs||{});
+  let dir = "调整";
+  if(/延长|放宽|扩大|增加|提高|提升|加强|加大/.test(t)) dir = "放宽 / 提高";
+  else if(/缩短|收紧|压缩|降低|减少|下调/.test(t)) dir = "收紧 / 降低";
+  else if(/取消|废除/.test(t)) dir = "取消";
+  else if(/改为|实行|实施|推行|新增|上线|纳入|升级/.test(t)) dir = "新增 / 变更";
+  const obj = inferred
+    ? "该规则（系统推断属于「" + c.name + "」）"
+    : "「" + state.matchedKw + "」相关制度（" + c.name + "）";
+  const rows = [
+    ["系统识别到的社会类型", `<b style="color:var(--primary-deep)">${s.ico} ${s.name}</b>`],
+    ["识别到的规则类别", `<b style="color:var(--primary-deep)">${c.name}</b><br><span style="font-size:12.5px;color:var(--muted)">该类别涵盖：${c.desc}</span>`],
+    ["发布对象与变化方向", esc(obj) + '　<span class="tag tag-blue">' + dir + '</span>'],
+    ["直接受影响主体", `<span class="tag tag-green">直接</span> ${esc(subs.d)}`],
+    ["间接受影响主体", `<span class="tag tag-blue">间接</span> ${esc(subs.i)}`],
+    ["管理执行主体", `<span class="tag tag-amber">管理</span> ${esc(subs.m)}`],
+    ["潜在受损主体", `<span class="tag tag-violet">受损</span> ${esc(subs.v)}`],
+    ["高风险行为主体", `<span class="tag tag-red">高危</span> ${esc(subs.h)}`],
+    ["可能收益（本场景专属，5 条）", '<ul class="cell-list">' + c.benefit.map(x=>"<li>"+x+"</li>").join("") + "</ul>"],
+    ["可能成本（本场景专属，5 条）", '<ul class="cell-list">' + c.cost.map(x=>"<li>"+x+"</li>").join("") + "</ul>"],
+    ["潜在风险（本场景专属，5 条）", '<ul class="cell-list">' + c.risk.map(x=>"<li>"+x+"</li>").join("") + "</ul>"],
+    ["需要采集数据", '<span class="tag tag-violet">支持度 / 风险感知 / 公平感知 / 行为意愿</span>']
+  ];
+  $("parseTbody").innerHTML = rows.map(r=>"<tr><td><b>"+r[0]+"</b></td><td>"+r[1]+"</td></tr>").join("");
+
+  if(inferred){
+    $("inferNote").innerHTML = "<b>以下为基于当前社会类型的推断。</b>你的输入「" + esc(state.content) + "」未命中「" + s.name + "」任何规则类别的关键词，系统已按该社会最典型的「" + c.name + "」进行推断式分析。如需精确分析，请返回补充内容（例如具体制度名称、变化方向、涉及主体）。";
+    $("inferNote").classList.add("show");
+  } else if(det.otherBest){
+    $("softNote").innerHTML = "小提示：输入中的关键词「" + esc(det.otherBest.kw) + "」也可能出现在「" + det.otherBest.soc.name + "」场景中。系统已按当前所选的「" + s.name + "」的「" + c.name + "」完成匹配，如发现类型选错，可返回第 2 步重新选择。";
+    $("softNote").classList.add("show");
+  }
+}
+
+/* ================================================================
+   第5页：专属问卷生成
+   ================================================================ */
+function buildQuestionnaire(){
+  const s = state.catSoc, c = state.cat, rule = state.content;
+  const subs = Object.assign({}, s.subj, c.subs||{});
+  let secs;
+  if(state.remote && state.remote.questionnaire && state.remote.questionnaire.sections.length){
+    secs = state.remote.questionnaire.sections;
+  } else {
+  const groups = s.groups.split("、").slice(0,8);
+  const planOpts = ["原方案：直接全面推行","温和方案：" + c.soft,"限制方案：" + c.lim,"试点方案：先在" + s.scope + "试点，验证后推广"];
+  secs = [
+    {name:"基本信息题", ico:"👤", qs:[
+      ["你的身份属于哪一类？", groups, false],
+      ["你与该规则/产品的关联程度如何？", ["密切相关","有一定关联","无直接关联"], false],
+      ["你使用相关服务或资源的频率是多少？", ["每天使用","每周数次","偶尔使用","几乎不使用"], false]
+    ]},
+    {name:"态度判断题", ico:"⚖", qs:[
+      ["你是否支持「" + rule + "」正式发布？", ["支持","中立","反对"], true],
+      ["你认为「" + rule + "」是否有必要？", ["非常有必要","一般","没有必要"], true],
+      ["如果正式实施，你是否愿意配合？", ["愿意配合","部分配合","不愿意配合"], true]
+    ]},
+    {name:"收益感知题（来自本类别专属收益）", ico:"📈", qs:[
+      c.benefit.slice(0,3).map(b=>["你认为它是否能实现「" + b + "」？", ["明显能","部分能","不能"], true])[0],
+      c.benefit.slice(0,3).map(b=>["你认为它是否能实现「" + b + "」？", ["明显能","部分能","不能"], true])[1],
+      c.benefit.slice(0,3).map(b=>["你认为它是否能实现「" + b + "」？", ["明显能","部分能","不能"], true])[2]
+    ]},
+    {name:"成本感知题（来自本类别专属成本）", ico:"📉", qs:[
+      c.cost.slice(0,3).map(x=>["你是否担心出现「" + x + "」？", ["非常担心","有点担心","不担心"], true])[0],
+      c.cost.slice(0,3).map(x=>["你是否担心出现「" + x + "」？", ["非常担心","有点担心","不担心"], true])[1],
+      c.cost.slice(0,3).map(x=>["你是否担心出现「" + x + "」？", ["非常担心","有点担心","不担心"], true])[2]
+    ]},
+    {name:"公平性题（针对潜在受损主体）", ico:"🤝", qs:[
+      ["你认为该规则对「" + subs.v + "」是否公平？", ["公平","基本公平","不太公平","很不公平"], true],
+      ["是否有某些群体会因此受到不利影响？", ["有","可能有","没有"], true],
+      ["是否需要补偿或保护机制？", ["需要","可酌情设置","不需要"], true]
+    ]},
+    {name:"风险与漏洞题（来自本类别专属风险与漏洞）", ico:"🕳", qs:[
+      c.risk.slice(0,2).map(x=>["你认为是否会出现「" + x + "」？", ["很可能","可能","不太可能"], true])[0],
+      c.risk.slice(0,2).map(x=>["你认为是否会出现「" + x + "」？", ["很可能","可能","不太可能"], true])[1],
+      ["你是否认为会有人利用「" + c.vuln[0] + "」这类漏洞？", ["很可能","可能","不太可能"], true],
+      ["你是否认为会有人利用「" + c.vuln[1] + "」这类漏洞？", ["很可能","可能","不太可能"], true]
+    ]},
+    {name:"替代方案题（对应 4 个反事实方案）", ico:"🔀", qs:[
+      ["你更支持哪种推行方式？", planOpts, true],
+      ["是否支持在推行中增加限制条件？", ["支持","视情况","不支持"], true],
+      ["是否支持设置反馈与修正机制？", ["支持","视情况","不支持"], true]
+    ]}
+  ];
+  }
+  state.qn = secs;
+  const totalQ = secs.reduce((a,x)=>a+x.qs.length,0);
+  const riskQ = secs.reduce((a,x)=>a+x.qs.filter(q=>q[2]).length,0);
+  $("qnMeta").innerHTML = `
+    <div class="m-chip">社会类型：<b>${s.ico} ${s.name}</b></div>
+    <div class="m-chip">规则类别：<b>${c.name}</b></div>
+    <div class="m-chip">题目总数：<b>${totalQ} 题</b></div>
+    <div class="m-chip">关键风险题：<b>${riskQ} 道</b></div>
+    <div class="m-chip">${state.inferred?'<b style="color:#b45309">推断模式生成</b>':'关键词「<b>'+esc(state.matchedKw)+'</b>」驱动'}</div>`;
+  $("qnList").innerHTML = secs.map((sec,i)=>`
+    <div class="qn-section">
+      <div class="q-sec-head"><span class="sec-no">${i+1}</span>${sec.name}<span style="font-size:15px">${sec.ico}</span><span class="cnt">${sec.qs.length} 题 · 依据本场景专属分析生成</span></div>
+      ${sec.qs.map(q=>`
+        <div class="q-item">
+          <div class="q-text">${esc(q[0])}</div>
+          <div class="q-opts">${q[1].map(o=>`<span class="q-opt">${esc(o)}</span>`).join("")}</div>
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+function downloadSurvey(){
+  const s = state.catSoc, c = state.cat;
+  let out = "规则沙盒：虚拟社会反应预演系统 —— 专属调查问卷\n（由「社会类型 + 规则类别 + 发布内容」自动生成）\n\n";
+  out += "虚拟社会类型：" + s.name + "\n识别规则类别：" + c.name + "\n发布内容：" + state.content + "\n";
+  if(state.inferred) out += "说明：以下为基于当前社会类型的推断。\n";
+  out += "\n";
+  state.qn.forEach((sec,i)=>{
+    out += (i+1) + "、" + sec.name + "\n";
+    sec.qs.forEach((q,j)=>{
+      out += "  Q" + (j+1) + "：" + q[0] + "\n";
+      out += "     选项：" + q[1].join(" / ") + "\n";
+    });
+    out += "\n";
+  });
+  out += "—— 规则沙盒 V2 · 让每一次发布都经过预演";
+  const blob = new Blob(["\ufeff" + out], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "规则沙盒-专属调查问卷.txt";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ================================================================
+   第6页：数据导入
+   ================================================================ */
+function goPage6FromQn(){ renderOpenData(); goPage(6); }
+function renderOpenData(){
+  $("openDataTbody").innerHTML = SOC.map(s=>
+    `<tr class="${state.soc===s.id?"hl-row":""}"><td>${s.ico} ${s.name}${state.soc===s.id?' <span class="tag tag-blue">当前类型</span>':""}</td><td>${(s.links||[]).map(l=>`<div class="od-item"><a href="${l[1]}" target="_blank" rel="noopener">${esc(l[0])} ↗</a><span class="od-url">${l[1]}</span></div>`).join("")}</td></tr>`).join("");
+  const s = socOf(state.soc);
+  $("openDataNote").innerHTML = "已匹配到你选择的「" + s.name + "」，公开数据将用于校准推演中的主体规模与行为基线。";
+}
+function onFileChosen(input){
+  if(!input.files || !input.files.length) return;
+  const f = input.files[0];
+  const zone = $("importZone");
+  zone.classList.add("imported");
+  zone.querySelector("p").textContent = "文件已导入，可点击重新选择";
+  $("importedFile").classList.add("show");
+  $("importedName").textContent = f.name;
+  $("importedRows").textContent = "已解析 · 有效样本 " + (120 + Math.floor(f.size % 800)) + " 份 · 按 5 类主体完成分类";
+  state.dataSource = "问卷数据（" + f.name + "）+ 公开数据（" + socOf(state.soc).data + "）";
+  $("btnSim").disabled = false;
+  $("importHint").textContent = "数据已就绪，可以开始行为推演";
+}
+function useMockData(){
+  state.dataSource = "系统内置模拟参数（基于「" + state.catSoc.name + " · " + state.cat.name + "」的主体画像仿真生成）";
+  goPage(7); runSimulation();
+}
+
+/* ================================================================
+   第7页：行为推演
+   ================================================================ */
+const SIM_STEPS = [
+  ["📣","规则/产品发布","向虚拟社会中的五类主体广播规则内容"],
+  ["🧠","各主体产生直接反应","直接受影响与间接受影响主体按画像与问卷参数计算初始态度"],
+  ["🔗","主体之间相互影响","受益主体、受损主体与高风险行为主体的行为相互传导"],
+  ["🌊","出现二次反应","规避、钻规则空子、投诉等衍生行为开始涌现"],
+  ["🕳","识别漏洞与隐性受损主体","扫描可被利用的规则空白与被忽视的受损主体"],
+  ["📊","生成双风险链与优化方案","汇总多维指标，输出主链、备选链与 4 方案对比"]
+];
+let simTimer = null;
+function runSimulation(){
+  const s = state.catSoc, c = state.cat;
+  $("simSub").innerHTML = "推演对象：「<b>" + esc(state.content.length>34 ? state.content.slice(0,34)+"…" : state.content) + "</b>」 · 场景：<b>" + s.name + " / " + c.name + "</b> · 主体：<b>五类角色</b> · 模式：<b>多主体行为推演 V2</b>";
+  $("simSteps").innerHTML = SIM_STEPS.map((x,i)=>`
+    <div class="sim-step" id="simStep-${i}">
+      <div class="ss-ico">${x[0]}</div>
+      <div class="ss-txt"><b>${x[1]}</b><small>${x[2]}</small></div>
+      <div class="ss-state">WAITING</div>
+    </div>`).join("");
+  $("simFill").style.width = "0%";
+  $("simPct").textContent = "0%";
+  $("btnViewResult").disabled = true;
+  state.simDone = false;
+  clearTimeout(simTimer);
+  let i = 0;
+  function next(){
+    if(i>0){
+      const prev = $("simStep-"+(i-1));
+      prev.classList.remove("running"); prev.classList.add("done");
+      prev.querySelector(".ss-state").textContent = "DONE ✓";
+    }
+    if(i < SIM_STEPS.length){
+      const cur = $("simStep-"+i);
+      cur.classList.add("running");
+      cur.querySelector(".ss-state").textContent = "RUNNING…";
+      const pct = Math.round((i+1)/SIM_STEPS.length*100*0.92);
+      $("simFill").style.width = pct + "%";
+      $("simPct").textContent = pct + "%";
+      i++; simTimer = setTimeout(next, 850);
+    } else {
+      $("simFill").style.width = "100%";
+      $("simPct").textContent = "100%";
+      $("simTitle").textContent = "SIMULATION COMPLETE · 推演完成";
+      $("simPulse").style.animation = "none";
+      $("btnViewResult").disabled = false;
+      $("simHint").textContent = "推演完成，可查看结果";
+      state.simDone = true;
+    }
+  }
+  $("simTitle").textContent = "MULTI-AGENT SIMULATION · 多主体行为推演运行中";
+  $("simPulse").style.animation = "pulse 1.2s infinite";
+  next();
+}
+
+/* ================================================================
+   第8页：结果总览
+   ================================================================ */
+function computeMetrics(){
+  let approve = 68, oppose = 21, risk = 42, fairness = 73;
+  if(state.scope==="全体推行"){ risk += 12; oppose += 6; }
+  if(state.scope==="小范围试点"){ risk -= 10; approve += 3; }
+  if(state.strength==="严格"){ risk += 8; oppose += 8; fairness -= 5; }
+  if(state.strength==="温和"){ risk -= 6; oppose -= 5; }
+  approve = Math.max(35, Math.min(88, approve));
+  oppose = Math.max(8, Math.min(40, oppose));
+  risk = Math.max(15, Math.min(85, risk));
+  fairness = Math.max(50, Math.min(92, fairness));
+  const diff = (risk > 62 || (state.scope==="全体推行" && state.strength==="严格")) ? "偏高" : (risk < 30 && state.scope==="小范围试点" ? "较低" : "中等");
+  const hole = risk >= 50 ? "偏高" : (risk >= 35 ? "中等" : "较低");
+  const recPlan = risk >= 55 ? "试点方案" : (risk >= 35 ? "限制方案" : "温和方案");
+  return {approve, oppose, risk, fairness, diff, hole, recPlan};
+}
+function showResults(){
+  const m = state.remote && state.remote.metrics ? state.remote.metrics : computeMetrics();
+  state.recPlan = m.recPlan;
+  const s = state.catSoc, c = state.cat;
+  const recDesc = m.recDesc || {
+    "试点方案":"先在" + s.scope + "试点，验证后再推广",
+    "限制方案":c.lim,
+    "温和方案":c.soft
+  }[m.recPlan];
+  $("conclText").innerHTML = state.remote && state.remote.conclusion ? state.remote.conclusion : `系统识别场景：<b>${s.name} · ${c.name}</b>。在虚拟社会中针对“<b>${esc(state.content)}</b>”的推演显示：该发布内容<b>具有一定可行性</b>，预计总体赞成度较高（<b>${m.approve}%</b>），但存在<b>「${c.vuln[0]}」</b>等规则漏洞与<b>潜在受损主体</b>（${esc((Object.assign({},s.subj,c.subs||{})).v)}）受益不均的风险（风险指数 <b>${m.risk}/100</b>）。建议采用<b>「${m.recPlan}」</b>：${esc(recDesc)}，并设置限制条件和反馈机制。`;
+  const cards = [
+    {label:"总体赞成度", val:m.approve+"%", cls:"mv-blue", fill:"fb-blue", pct:m.approve, foot:"按五类主体规模加权后的综合支持水平"},
+    {label:"总体反对度", val:m.oppose+"%", cls:"mv-red", fill:"fb-red", pct:m.oppose, foot:"潜在投诉与冲突的主体基础"},
+    {label:"风险指数", val:m.risk+"/100", cls:m.risk>=50?"mv-red":"mv-amber", fill:m.risk>=50?"fb-red":"fb-amber", pct:m.risk, foot:"综合「"+c.name+"」漏洞、公平、次生风险的加权"},
+    {label:"公平性评分", val:m.fairness+"/100", cls:"mv-green", fill:"fb-green", pct:m.fairness, foot:"主体间受益/受损分布的均衡程度"},
+    {label:"执行难度", val:m.diff, cls:"mv-violet", fill:"fb-violet", pct:m.diff==="偏高"?78:m.diff==="中等"?50:28, foot:"管理执行主体的实施成本与压力"},
+    {label:"漏洞风险", val:m.hole, cls:m.hole==="偏高"?"mv-red":"mv-amber", fill:m.hole==="偏高"?"fb-red":"fb-amber", pct:m.hole==="偏高"?75:50, foot:"按本场景漏洞表现评估的规则规避概率"},
+    {label:"推荐策略", val:m.recPlan, cls:"mv-blue", fill:"fb-blue", pct:80, foot:recDesc, wide:true, isText:true}
+  ];
+  $("metricGrid").innerHTML = cards.map(x=>`
+    <div class="metric-card ${x.wide?"wide":""}">
+      <div class="m-label">${x.label}</div>
+      <div class="m-val ${x.isText?"m-strategy":""} ${x.cls}">${x.val}</div>
+      <div class="m-bar"><div class="m-fill ${x.fill}" data-pct="${x.pct}"></div></div>
+      <div class="m-foot">${esc(x.foot)}</div>
+    </div>`).join("");
+  goPage(8);
+  setTimeout(()=>{ document.querySelectorAll(".m-fill").forEach(el=>{ el.style.width = el.dataset.pct + "%"; }); }, 80);
+  renderGroups();
+  renderChains();
+  renderVulns();
+  renderPlans();
+}
+
+/* ================================================================
+   第9页：五类主体差异
+   ================================================================ */
+function renderGroups(){
+  const s = state.catSoc, c = state.cat;
+  const subs = Object.assign({}, s.subj, c.subs||{});
+  const rows = state.remote && state.remote.groups && state.remote.groups.length
+    ? state.remote.groups.map(g=>({role:g.role, tagCls:g.tagCls, att:g.att, subj:g.subj, why:g.why, risk:g.risk, appr:g.appr, bar:g.bar, riskMode:g.riskMode}))
+    : [
+    {role:"直接受影响主体", tagCls:"tag-green", att:"支持偏中立", subj:subs.d, why:"直接关联，受益或受损取决于具体处境", risk:"配合度随执行效果波动", appr:72, bar:"fb-green"},
+    {role:"间接受影响主体", tagCls:"tag-blue", att:"中立", subj:subs.i, why:"影响不明显，多数保持观望", risk:"观望态度，易被舆论带动", appr:54, bar:"fb-blue"},
+    {role:"管理执行主体", tagCls:"tag-amber", att:"谨慎支持", subj:subs.m, why:"有利于秩序与目标达成", risk:"执行成本上升：" + c.cost[0], appr:61, bar:"fb-amber"},
+    {role:"潜在受损主体", tagCls:"tag-violet", att:"反对", subj:subs.v, why:"感知成本增加或受益不均", risk:"可能投诉、抵触与流失", appr:24, bar:"fb-violet"},
+    {role:"高风险行为主体", tagCls:"tag-red", att:"倾向利用", subj:subs.h, why:"寻求规则空间、钻规则空子的机会", risk:"高危行为：" + c.vuln[0], appr:82, bar:"fb-red", riskMode:true}
+  ];
+  $("groupTbody").innerHTML = rows.map(r=>`
+    <tr>
+      <td><b>${r.role}</b></td>
+      <td style="max-width:200px">${esc(r.subj)}</td>
+      <td><span class="tag ${r.tagCls}">${r.att}</span></td>
+      <td class="bar-cell"><div class="mini-bar"><div class="mb-track"><div class="mb-fill ${r.bar}" style="width:0" data-w="${r.appr}"></div></div><span class="mb-num">${r.riskMode?"—":r.appr+"%"}</span></div>${r.riskMode?'<div style="font-size:11px;color:#b91c1c;margin-top:3px">风险行为倾向 '+r.appr+'%</div>':""}</td>
+      <td>${r.why}</td>
+      <td style="color:#b91c1c">${esc(r.risk)}</td>
+    </tr>`).join("");
+  setTimeout(()=>{ document.querySelectorAll(".mb-fill").forEach(el=>el.style.width = el.dataset.w+"%"); }, 300);
+}
+
+/* ================================================================
+   第10页：双风险链与漏洞预警
+   ================================================================ */
+function chainHTML(nodes, main){
+  const n = nodes.length;
+  return nodes.map((x,i)=>{
+    let cls = "", arrowCls = main ? "" : "";
+    if(i===0) cls = "c-start";
+    else if(i===n-1) cls = "c-end";
+    else if(i>=n-4) cls = "c-warn";
+    const arrow = i<n-1 ? `<span class="chain-arrow ${i>=n-4?"warn":""}">→</span>` : "";
+    return `<span class="chain-node ${cls}">${x}</span>` + arrow;
+  }).join("");
+}
+function renderChains(){
+  const c = state.cat;
+  let mainNodes, altNodes;
+  if(state.remote && state.remote.chains && state.remote.chains.main && state.remote.chains.main.length){
+    mainNodes = state.remote.chains.main;
+    altNodes = state.remote.chains.alt;
+  } else {
+    mainNodes = ["规则发布"].concat(c.chain, ["规则需要二次修改"]);
+    altNodes = ["规则发布"].concat(c.alt, ["规则需要二次修改"]);
+  }
+  $("mainChain").innerHTML = chainHTML(mainNodes, true);
+  $("altChain").innerHTML = chainHTML(altNodes, false);
+}
+function renderVulns(){
+  const c = state.cat;
+  const items = state.remote && state.remote.vulns && state.remote.vulns.length
+    ? state.remote.vulns.map(v=>({name:v.name, level:v.level}))
+    : c.vuln.map((v,i)=>({name:v, level:i<2?"高":"中"}));
+  $("vulnTbody").innerHTML = items.map((v,i)=>`
+    <tr><td><span class="tag tag-red">V${i+1}</span></td><td><b>${esc(v.name)}</b><br><span style="font-size:12.5px;color:var(--muted)">来源：${c.name}漏洞知识库 · 仅使用本场景词语</span></td><td><span class="tag ${v.level==="高"?"tag-red":"tag-amber"}">${v.level}</span></td></tr>`).join("");
+}
+
+/* ================================================================
+   第11页：四方案对比
+   ================================================================ */
+function renderPlans(){
+  const s = state.catSoc, c = state.cat, m = state.remote && state.remote.metrics ? state.remote.metrics : (state.recMetrics || computeMetrics());
+  state.recMetrics = m;
+  let plans, rec, recWhy;
+  if(state.remote && state.remote.plans && state.remote.plans.length){
+    plans = state.remote.plans;
+    rec = state.remote.rec || plans.find(p=>p.best) || plans[plans.length-1];
+    recWhy = rec.why || "";
+  } else {
+    plans = [
+      {name:"原方案", desc:"直接全面推行", appr:"高", risk:"高", fair:"中", diff:"低", best:false},
+      {name:"温和方案", desc:c.soft, appr:"中高", risk:"低", fair:"中高", diff:"中", best:m.recPlan==="温和方案"},
+      {name:"限制方案", desc:c.lim, appr:"中", risk:"低", fair:"高", diff:"中高", best:m.recPlan==="限制方案"},
+      {name:"试点方案", desc:"先在" + s.scope + "试点，收集反馈验证后推广", appr:"中高", risk:"中低", fair:"高", diff:"中", best:m.recPlan==="试点方案"}
+    ];
+    rec = plans.find(p=>p.best);
+    recWhy = {
+      "试点方案":"虽然推进速度较慢，但能够在「" + s.scope + "」先验证本场景的核心风险（" + c.risk[0] + "），并保留根据反馈修正的空间。",
+      "限制方案":"能够直接封堵「" + c.vuln[0] + "」这一高等级漏洞，在不牺牲推行速度的前提下把风险控制在可接受范围。",
+      "温和方案":"以较小幅度渐进推行，给潜在受损主体（" + (Object.assign({},s.subj,c.subs||{})).v + "）留出适应时间，降低反对度与执行阻力。"
+    }[rec.name];
+  }
+  const lvlTag = v => ({高:'<span class="tag tag-red">高</span>',中高:'<span class="tag tag-amber">中高</span>',中:'<span class="tag tag-amber">中</span>',中低:'<span class="tag tag-green">中低</span>',低:'<span class="tag tag-green">低</span>',中高_:'<span class="tag tag-amber">中高</span>'})[v] || v;
+  $("planTbody").innerHTML = plans.map(p=>`
+    <tr class="${p.best?"plan-best":""}">
+      <td><span class="tag ${p.name==="原方案"?"tag-blue":"tag-green"}">${p.name}</span>${p.best?'<br><span class="tag tag-green">推荐 ✓</span>':""}</td>
+      <td style="min-width:220px">${p.desc}</td>
+      <td>${lvlTag(p.appr)}</td><td>${lvlTag(p.risk)}</td><td>${lvlTag(p.fair)}</td><td>${lvlTag(p.diff)}</td>
+    </tr>`).join("");
+  $("planRec").innerHTML = `
+    <div class="rec-ico">✅</div>
+    <div>
+      <h4>系统推荐：${rec.name} —— ${rec.desc}</h4>
+      <p>推演依据：${s.name} · ${c.name}场景，风险指数 ${m.risk}/100，漏洞风险${m.hole}。${recWhy}</p>
+    </div>`;
+}
+
+/* ================================================================
+   第12页：可解释分析报告
+   ================================================================ */
+let reportHTML = "";
+function buildReport(){
+  if(state.remote && state.remote.report && state.remote.report.sections){
+    reportHTML = state.remote.report.head + '<div class="report-body">'
+      + state.remote.report.sections.map((x,i)=>`<div class="r-sec"><div class="r-sec-title"><span class="r-no">${i+1}</span>${x.t}</div>${x.html}</div>`).join("")
+      + '</div>';
+    $("reportBox").innerHTML = reportHTML;
+    return;
+  }
+  const s = state.catSoc, c = state.cat, m = state.recMetrics || computeMetrics();
+  const subs = Object.assign({}, s.subj, c.subs||{});
+  const src = state.dataSource || "系统内置模拟参数（基于「" + s.name + " · " + c.name + "」主体画像仿真生成）";
+  const dateStr = new Date().toLocaleDateString("zh-CN");
+  const confText = state.inferred ? "推断模式（<b>以下为基于当前社会类型的推断</b>：输入未命中关键词，按「" + c.name + "」推断）" : "高置信模式（关键词「" + state.matchedKw + "」命中「" + c.name + "」）";
+  const planList = [
+    ["原方案","直接全面推行"],
+    ["温和方案", c.soft],
+    ["限制方案", c.lim],
+    ["试点方案","先在" + s.scope + "试点，验证后推广"]
+  ];
+  const secs = [
+    {t:"一、发布内容概述", html:`<p>本次试运行的分析对象为：<b>“${esc(state.content)}”</b>。规则属性设定为：发布目标「${state.goal}」、发布范围「${state.scope}」、规则强度「${state.strength}」。识别置信方式：${confText}。</p>`},
+    {t:"二、虚拟社会类型与规则类别", html:`<p>本次推演选用的虚拟社会类型为<b>「${s.ico} ${s.name}」</b>，识别到的规则类别为<b>「${c.name}」</b>（涵盖：${c.desc}）。分析全部使用本场景专属词语，未混入其他场景内容。</p>
+      <div class="r-kv">
+        <div class="kv"><div class="k">直接受影响主体</div><div class="v">${subs.d}</div></div>
+        <div class="kv"><div class="k">间接受影响主体</div><div class="v">${subs.i}</div></div>
+        <div class="kv"><div class="k">管理执行主体</div><div class="v">${subs.m}</div></div>
+        <div class="kv"><div class="k">潜在受损主体</div><div class="v">${subs.v}</div></div>
+        <div class="kv"><div class="k">高风险行为主体</div><div class="v">${subs.h}</div></div>
+        <div class="kv"><div class="k">主要群体</div><div class="v">${s.groups}</div></div>
+      </div>`},
+    {t:"三、数据来源", html:`<p>本次推演使用的数据来源为：<b>${esc(src)}</b>；公开数据（${s.data}）用于校准主体规模与行为基线。问卷统计按参数转换表映射为初始赞成度、成本感知、公平风险、漏洞风险与行为变化概率等推演参数。</p>`},
+    {t:"四、主体反应（五类角色）", html:`<p>推演显示五类主体对同一规则的反应存在显著差异：</p>
+      <ul>
+        <li><b>支持与观望</b>：直接受影响主体（${subs.d}）预期受益，赞成度约 72%；间接受影响主体（${subs.i}）态度中立（约 54%），短期以观望为主。</li>
+        <li><b>反对与投诉</b>：潜在受损主体（${subs.v}）感知成本增加或受益不均，赞成度仅约 24%，是投诉与抵触的主要来源。</li>
+        <li><b>管理行为</b>：管理执行主体（${subs.m}）谨慎支持，但担心「${c.cost[0]}」，执行成本上升。</li>
+        <li><b>高风险行为</b>：高风险行为主体（${subs.h}）倾向利用规则空间，预计最可能尝试「${c.vuln[0]}」。</li>
+      </ul>`},
+    {t:"五、风险链分析（主链 + 备选链）", html:`<p><b>主风险链：</b>${["规则发布"].concat(c.chain,["规则需要二次修改"]).join(" → ")}。</p>
+      <p><b>备选风险链：</b>${["规则发布"].concat(c.alt,["规则需要二次修改"]).join(" → ")}。</p>
+      <p>两条链条表明：风险并不来自规则本身，而来自<b>主体行为的相互挤压与连锁传导</b>。在链条中段（资源/利益被集中占用与满意度下降节点）插入干预，即可显著阻断风险扩散。</p>`},
+    {t:"六、漏洞预警", html:`<p>系统识别出该规则在「${c.name}」场景下可能被利用、误解或规避的位置：</p>
+      <ul>${c.vuln.map((v,i)=>`<li><b>${v}</b>（预警等级：${i<2?"高":"中"}）</li>`).join("")}</ul>
+      <p>以上漏洞均来自本场景专属知识库，与「${s.name}」严格一致。</p>`},
+    {t:"七、替代方案对比", html:`<p>系统生成 4 个反事实方案并与原方案对比：</p>
+      <ul>${planList.map(p=>`<li><b>${p[0]}</b>：${p[1]}</li>`).join("")}</ul>
+      <p>综合推演指标（风险指数 ${m.risk}/100，漏洞风险${m.hole}），系统推荐采用<b>「${m.recPlan}」</b>${m.recPlan==="限制方案"?"（即："+c.lim+"）":m.recPlan==="温和方案"?"（即："+c.soft+"）":"（先在"+s.scope+"试点，验证后推广）"}。</p>`},
+    {t:"八、最终建议", html:`<ul>
+        <li><b>是否适合发布</b>：有条件适合。总体赞成度 ${m.approve}%、公平性 ${m.fairness}/100 表明具备发布基础，但风险指数 ${m.risk}/100 提示不宜按原方案直接全面推行。</li>
+        <li><b>如何修改</b>：重点修补「${c.vuln[0]}」与「${c.vuln[1]}」两类高等级漏洞，可参考限制方案（${c.lim}）。</li>
+        <li><b>是否需要试点</b>：${m.recPlan==="试点方案"?"<b>需要</b>。先在"+s.scope+"试点，重点监测「"+c.risk[0]+"」与投诉量两个先行指标。":"可结合「"+m.recPlan+"」先行验证，再决定扩大范围。"}</li>
+        <li><b>是否需要补偿机制</b>：建议为潜在受损主体（${subs.v}）设置过渡性补偿、豁免或辅助条款，降低公平性风险。</li>
+        <li><b>反馈机制</b>：设置试点反馈窗口，收集结构化意见并回流至沙盒，迭代验证后再扩大范围。</li>
+      </ul>
+      <p style="margin-top:10px;color:var(--muted);font-size:12.5px">本报告由「规则沙盒：虚拟社会反应预演系统 V2」自动生成，基于「社会类型 × 规则类别」场景知识库，每一条结论均对应推演过程中的可追溯数据节点。 · 生成日期：${dateStr}</p>`}
+  ];
+  reportHTML = `
+    <div class="report-head">
+      <div class="rh-tag">RULE SANDBOX V2 · EXPLAINABLE REPORT</div>
+      <h2>规则试运行分析报告</h2>
+      <div class="rh-meta"><span>虚拟社会：${s.ico} ${s.name}</span><span>规则类别：${c.name}</span><span>风险指数：${m.risk}/100</span><span>推荐策略：${m.recPlan}</span><span>${state.inferred?"推断模式":"高置信识别"}</span><span>${dateStr}</span></div>
+    </div>
+    <div class="report-body">
+      ${secs.map((x,i)=>`<div class="r-sec"><div class="r-sec-title"><span class="r-no">${i+1}</span>${x.t}</div>${x.html}</div>`).join("")}
+    </div>`;
+  $("reportBox").innerHTML = reportHTML;
+}
+function exportReport(){
+  const s = state.catSoc, c = state.cat, m = state.recMetrics || computeMetrics();
+  let txt = "规则试运行分析报告\n规则沙盒：虚拟社会反应预演系统 V2\n\n";
+  txt += "虚拟社会类型：" + s.name + "\n识别规则类别：" + c.name + "\n发布内容：" + state.content + "\n";
+  txt += "识别方式：" + (state.inferred ? "推断模式（以下为基于当前社会类型的推断）" : "高置信（关键词「" + state.matchedKw + "」命中）") + "\n";
+  txt += "总体赞成度：" + m.approve + "%  反对度：" + m.oppose + "%  风险指数：" + m.risk + "/100\n";
+  txt += "公平性：" + m.fairness + "/100  执行难度：" + m.diff + "  漏洞风险：" + m.hole + "  推荐策略：" + m.recPlan + "\n\n";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = reportHTML;
+  tmp.querySelectorAll(".r-sec").forEach(sec=>{
+    txt += "【" + sec.querySelector(".r-sec-title").textContent.trim() + "】\n";
+    sec.querySelectorAll("p,li").forEach(el=>{
+      txt += (el.tagName==="LI"?"  · ":"") + el.textContent.trim().replace(/\s+/g," ") + "\n";
+    });
+    txt += "\n";
+  });
+  txt += "—— 规则沙盒 V2 · 让每一次发布都经过预演";
+  const blob = new Blob(["\ufeff"+txt], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "规则沙盒-试运行分析报告.txt";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ================================================================
+   页面跳转 / 步骤条 / 重置
+   ================================================================ */
+function goPage(n){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  $("page-"+n).classList.add("active");
+  state.page = n;
+  state.visited.add(n);
+  $("stepperWrap").classList.add("show");
+  $("footBar").classList.add("show");
+  $("footStep").textContent = n + " / 12";
+  renderStepper();
+  if(n===3 && state.soc) renderExamples();
+  if(n===6 && state.catSoc) renderOpenData();
+  if(n===7 && state.visited.has(7) && !state.simDone) runSimulation();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function renderStepper(){
+  $("stepper").innerHTML = STEP_NAMES.map((name,i)=>{
+    const n = i+1;
+    const visited = state.visited.has(n);
+    let cls = "step-dot";
+    if(n === state.page) cls += " active";
+    else if(visited) cls += " done";
+    const clickable = visited ? `onclick="goPage(${n})"` : "";
+    return `<div class="${cls}" ${clickable}>${n}<span class="tip">第 ${n} 步 · ${name}</span></div>` + (i<11 ? `<span class="step-line ${visited?"done":""}"></span>` : "");
+  }).join("");
+}
+function restart(){
+  state.soc = null; state.content = ""; state.simDone = false; state.dataSource = "";
+  state.remote = null; state.sessionId = null;
+  state.cat = null; state.catSoc = null; state.matchedKw = null; state.inferred = false; state.pendingDet = null; state.qn = null; state.recMetrics = null;
+  state.goal = "提高满意度"; state.scope = "部分群体"; state.strength = "中等";
+  $("ruleInput").value = "";
+  document.querySelectorAll(".chip.on").forEach(x=>x.classList.remove("on"));
+  document.querySelectorAll(".chips").forEach(g=>{
+    const def = {goal:"提高满意度", scope:"部分群体", strength:"中等"}[g.dataset.group];
+    g.querySelectorAll(".chip").forEach(x=>{ if(x.textContent.trim()===def) x.classList.add("on"); });
+  });
+  $("topSociety").classList.remove("show");
+  $("btnConfirmSoc").disabled = true;
+  $("btnAnalyze").disabled = true;
+  document.querySelectorAll(".id-banner").forEach(x=>x.classList.remove("show"));
+  $("importZone").classList.remove("imported");
+  $("importZone").querySelector("p").textContent = "点击或拖拽文件到此处导入问卷结果";
+  $("importedFile").classList.remove("show");
+  $("btnSim").disabled = true;
+  $("importHint").textContent = "请先导入问卷结果文件（或返回上一步选择模拟数据）";
+  renderSocGrid();
+  goPage(1);
+}
+
+/* ================================================================
+   初始化
+   ================================================================ */
+renderSocGrid();
+probeBackend();
+const zone = $("importZone");
+["dragover","dragenter"].forEach(ev=>zone.addEventListener(ev, e=>{ e.preventDefault(); zone.style.borderColor = "var(--primary)"; }));
+["dragleave","drop"].forEach(ev=>zone.addEventListener(ev, e=>{ e.preventDefault(); zone.style.borderColor = ""; }));
+zone.addEventListener("drop", e=>{
+  const dt = e.dataTransfer;
+  if(dt.files && dt.files.length){
+    try{ $("fileInput").files = dt.files; }catch(err){}
+    onFileChosen({files:dt.files});
+  }
+});
+</script>
+</body>
+</html>

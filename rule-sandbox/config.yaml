@@ -1,0 +1,41 @@
+server:
+  host: 127.0.0.1
+  port: 8000
+  mode: agent
+
+cors:
+  origins:
+    - https://9aa6eec419d14da9a75443262bfbc669.app.workbuddy.host
+
+llm:
+  enabled: false
+  base_url: https://api.openai.com/v1
+  api_key: ""
+  model: gpt-4o-mini
+  timeout: 30
+  retries: 2
+
+mcp:
+  startup_timeout: 30
+  call_timeout: 60
+  retries: 2
+  servers:
+    society-identification:
+      command: "{python}"
+      args:
+        - mcp_servers/society_identification_server.py
+    risk-chain:
+      command: "{python}"
+      args:
+        - mcp_servers/risk_chain_server.py
+    vulnerability-warning:
+      command: "{python}"
+      args:
+        - mcp_servers/vulnerability_warning_server.py
+    plan-generation:
+      command: "{python}"
+      args:
+        - mcp_servers/plan_generation_server.py
+
+session:
+  dir: backend/data/sessions

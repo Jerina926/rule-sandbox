@@ -1,0 +1,56 @@
+{
+ "session_id": "d11fa611a9b8",
+ "created_at": "2026-10-14 01:54:39",
+ "runs": [
+  {
+   "run_index": 1,
+   "at": "2026-10-14 01:54:39",
+   "request": {
+    "society_id": "school",
+    "content": "平台大促发放满减优惠券并延长退货期限",
+    "goal": "提高满意度",
+    "scope": "全体推行",
+    "strength": "中等",
+    "allow_inference": false
+   },
+   "result": {
+    "status": "mismatch",
+    "current_society": {
+     "id": "school",
+     "name": "学校型社会",
+     "ico": "🎓",
+     "cats": 6
+    },
+    "suggested": {
+     "society_id": "ecom",
+     "name": "电商平台型社会",
+     "ico": "🛒",
+     "category_name": "优惠促销类",
+     "kw": "优惠券",
+     "count": 5
+    },
+    "message": "发布内容与当前社会类型的全部 6 个规则类别均不匹配，而与「电商平台型社会」的「优惠促销类」高度匹配（命中 5 个关键词）。请重新确认社会类型，系统不会强行生成无关结果。",
+    "trace": [
+     {
+      "step": "identify",
+      "server": "society-identification",
+      "tool": "identify",
+      "status": "mcp",
+      "ms": 1,
+      "retries": 0
+     },
+     {
+      "step": "gate",
+      "server": "-",
+      "tool": "mismatch-gate",
+      "status": "blocked",
+      "ms": 0,
+      "retries": 0,
+      "error": "发布内容与当前社会类型不匹配，已拦截并提示用户重新确认"
+     }
+    ]
+   }
+  }
+ ],
+ "updated_at": "2026-10-14 01:54:39"
+}
