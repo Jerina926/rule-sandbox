@@ -377,7 +377,8 @@ def simulate_metrics(goal="提高满意度", scope="部分群体", strength="中
             "data_source": src_label, "source_basis": basis, "live": live_info,
             "composite": {"support": comp_sup, "risk": comp_risk,
                           "affected": dyn["affected"], "total_pop": dyn["total_pop"],
-                          "correlation": dyn["correlation"], "groups": dyn["groups"]},
+                          "scope_factor": dyn["scope_factor"], "correlation": dyn["correlation"],
+                          "groups": dyn["groups"]},
             "attributes": ra,
             "attribute_basis": attribute_basis(goal, scope, strength)}
 
