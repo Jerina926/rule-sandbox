@@ -52,6 +52,9 @@ class Planner:
         allow_inference = bool(request.get("allow_inference"))
         data_source = request.get("data_source", "") or ""
         src_label = data_source or "系统内置模拟参数"
+        goal = request.get("goal", "提高满意度")
+        scope = request.get("scope", "部分群体")
+        strength = request.get("strength", "中等")
         trace = []
 
         ident = await self._call("identify", {"society_id": society_id, "content": content},
@@ -97,31 +100,35 @@ class Planner:
             else {"ok": False, "reason": "no_url", "ms": 0}
 
         metrics = await self._call(
-            "metrics", {"scope": request.get("scope", "部分群体"), "strength": request.get("strength", "中等"),
+            "metrics", {"goal": goal, "scope": scope, "strength": strength,
                         "data_source": data_source, "live": live},
-            lambda: engine.simulate_metrics(request.get("scope", "部分群体"), request.get("strength", "中等"),
-                                            data_source, live), trace)
+            lambda: engine.simulate_metrics(goal, scope, strength, data_source, live), trace)
 
         groups = await self._call(
-            "groups", {"society_id": society_id, "category_name": category_name},
-            lambda: {"groups": engine.deduce_groups(society_id, category_name)}, trace)
+            "groups", {"society_id": society_id, "category_name": category_name,
+                       "goal": goal, "scope": scope, "strength": strength},
+            lambda: {"groups": engine.deduce_groups(society_id, category_name, goal, scope, strength)}, trace)
 
         chains = await self._call(
-            "chains", {"society_id": society_id, "category_name": category_name},
-            lambda: engine.deduce_chains(society_id, category_name), trace)
+            "chains", {"society_id": society_id, "category_name": category_name,
+                       "goal": goal, "scope": scope, "strength": strength},
+            lambda: engine.deduce_chains(society_id, category_name, goal, scope, strength), trace)
         if not self._reflect(self.validator.check_chains(chains), trace, "chains"):
             return {"status": "error", "message": "风险链生成未通过校验器（约束 4）", "trace": trace}
 
         warned = await self._call(
-            "vulns", {"society_id": society_id, "category_name": category_name, "content": content},
-            lambda: engine.warn_vulnerabilities(society_id, category_name, content), trace)
+            "vulns", {"society_id": society_id, "category_name": category_name, "content": content,
+                      "strength": strength},
+            lambda: engine.warn_vulnerabilities(society_id, category_name, content, strength), trace)
         if not self._reflect(self.validator.check_vulns(warned.get("vulns", []), warned.get("audit", {}), content),
                              trace, "vulns"):
             return {"status": "error", "message": "漏洞预警未通过校验器（约束 3）", "trace": trace}
 
         planned = await self._call(
             "plans", {"society_id": society_id, "category_name": category_name,
-                      "risk": metrics.get("risk", 0), "hole": metrics.get("hole", ""), "rec_plan": metrics.get("recPlan", "")},
+                      "risk": metrics.get("risk", 0), "hole": metrics.get("hole", ""),
+                      "rec_plan": metrics.get("recPlan", ""),
+                      "goal": goal, "scope": scope, "strength": strength},
             lambda: engine.generate_plans(society_id, category_name, metrics), trace)
         plans = planned.get("plans", [])
         rec = planned.get("rec") or {"name": metrics.get("recPlan", ""), "desc": "", "why": ""}
@@ -129,6 +136,8 @@ class Planner:
             return {"status": "error", "message": "方案生成未通过校验器（约束 5）", "trace": trace}
 
         s, c = engine.category_full(society_id, category_name)
+        if plans and rec.get("name"):
+            metrics["recPlan"] = rec["name"]
         metrics["recDesc"] = engine.rec_desc(s, c, metrics.get("recPlan", "试点方案"))
         base_conclusion = engine.conclusion(society_id, category_name, content, ident, metrics)
         llm_text = self.gateway.complete(LLM_SYSTEM, _llm_prompt(ident, metrics, warned, rec, chains, content))
@@ -150,9 +159,12 @@ class Planner:
                 "data_source": src_label,
             },
             "content": content,
-            "goal": request.get("goal", ""),
-            "scope": request.get("scope", ""),
-            "strength": request.get("strength", ""),
+            "goal": goal,
+            "scope": scope,
+            "strength": strength,
+            "attribute_basis": metrics.get("attribute_basis", {}),
+            "composite": metrics.get("composite", {}),
+            "affected_people": metrics.get("composite", {}).get("affected", 0),
             "benefits": ident.get("benefits", []),
             "costs": ident.get("costs", []),
             "risks": ident.get("risks", []),
@@ -175,8 +187,7 @@ class Planner:
             society_id, category_name, content, analysis["identification"], metrics, chains,
             analysis["vulns"], analysis["audit"], plans, rec,
             request.get("data_source", ""), conclusion_html, run_index,
-            validation, trace, llm_mode,
-            request.get("goal", ""), request.get("scope", ""), request.get("strength", ""))
+            validation, trace, llm_mode, goal, scope, strength)
         analysis["validation"] = validation
         analysis["trace"] = trace
         return {"status": "ok", "analysis": analysis, "trace": trace}
