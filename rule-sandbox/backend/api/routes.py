@@ -58,6 +58,13 @@ async def societies():
     ]}
 
 
+@router.get("/attribute-test")
+async def attribute_test():
+    """控制变量测试：固定社会类型/发布内容/群体人数/数据来源，只改变一个规则属性比较前后结果。"""
+    from knowledge import engine
+    return engine.attribute_contrast_test()
+
+
 class ExplainRequest(BaseModel):
     society_id: str
     category_name: str = ""
