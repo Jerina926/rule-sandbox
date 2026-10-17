@@ -12,9 +12,11 @@ mcp = FastMCP("plan-generation")
 
 
 @mcp.tool()
-def generate_plans(society_id: str, category_name: str, risk: int, hole: str, rec_plan: str) -> dict:
+def generate_plans(society_id: str, category_name: str, risk: int, hole: str, rec_plan: str,
+                   goal: str = "提高满意度", scope: str = "部分群体", strength: str = "中等") -> dict:
     return engine.generate_plans(society_id, category_name,
-                                  {"risk": risk, "hole": hole, "recPlan": rec_plan})
+                                  {"risk": risk, "hole": hole, "recPlan": rec_plan,
+                                   "goal": goal, "scope": scope, "strength": strength})
 
 
 if __name__ == "__main__":

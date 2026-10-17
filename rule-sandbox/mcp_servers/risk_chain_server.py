@@ -12,18 +12,21 @@ mcp = FastMCP("risk-chain")
 
 
 @mcp.tool()
-def simulate_metrics(scope: str, strength: str, data_source: str = "", live: dict = None) -> dict:
-    return engine.simulate_metrics(scope, strength, data_source, live or None)
+def simulate_metrics(goal: str = "提高满意度", scope: str = "部分群体", strength: str = "中等",
+                     data_source: str = "", live: dict = None) -> dict:
+    return engine.simulate_metrics(goal, scope, strength, data_source, live or None)
 
 
 @mcp.tool()
-def deduce_groups(society_id: str, category_name: str) -> dict:
-    return {"groups": engine.deduce_groups(society_id, category_name)}
+def deduce_groups(society_id: str, category_name: str, goal: str = "提高满意度",
+                  scope: str = "部分群体", strength: str = "中等") -> dict:
+    return {"groups": engine.deduce_groups(society_id, category_name, goal, scope, strength)}
 
 
 @mcp.tool()
-def deduce_chains(society_id: str, category_name: str) -> dict:
-    return engine.deduce_chains(society_id, category_name)
+def deduce_chains(society_id: str, category_name: str, goal: str = "提高满意度",
+                  scope: str = "部分群体", strength: str = "中等") -> dict:
+    return engine.deduce_chains(society_id, category_name, goal, scope, strength)
 
 
 if __name__ == "__main__":
