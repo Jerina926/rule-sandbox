@@ -1,6 +1,7 @@
 import time
 
 from knowledge import engine
+from knowledge import public_fetch
 
 SERVERS = {
     "identify": ("society-identification", "identify"),
@@ -90,11 +91,16 @@ class Planner:
             "questionnaire", {"society_id": society_id, "category_name": category_name, "content": content},
             lambda: {"sections": engine.build_questionnaire(society_id, category_name, content)}, trace)
 
+        # 公开数据实时拉取：用户选定来源 URL 时尝试获取代表性比例；失败回退预设校准基线
+        data_source_url = request.get("data_source_url", "") or ""
+        live = await public_fetch.try_live_fetch(data_source_url) if data_source_url \
+            else {"ok": False, "reason": "no_url", "ms": 0}
+
         metrics = await self._call(
             "metrics", {"scope": request.get("scope", "部分群体"), "strength": request.get("strength", "中等"),
-                        "data_source": data_source},
+                        "data_source": data_source, "live": live},
             lambda: engine.simulate_metrics(request.get("scope", "部分群体"), request.get("strength", "中等"),
-                                            data_source), trace)
+                                            data_source, live), trace)
 
         groups = await self._call(
             "groups", {"society_id": society_id, "category_name": category_name},
