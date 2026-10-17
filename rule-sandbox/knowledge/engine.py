@@ -131,14 +131,25 @@ def build_questionnaire(society_id, category_name, content):
     ]
 
 
-def simulate_metrics(scope, strength, data_source=""):
+def simulate_metrics(scope, strength, data_source="", live=None):
     if scope not in SCOPE_KEYS:
         scope = "部分群体"
     if strength not in STRENGTH_KEYS:
         strength = "中等"
     approve, oppose, risk, fairness = 68, 21, 42, 73
-    # 公开数据校准：有官方公开数据支撑时，支持度更明确、风险感知更可控（基线偏移）
-    if data_source and data_source != "系统内置模拟参数":
+    live_used = False
+    live_info = {}
+    if live and live.get("ok"):
+        # 实时拉取成功：用来源页代表性比例做温和校准（与模板基线折中，避免单一页面占比失真）
+        live_used = True
+        v = float(live["value"])
+        approve = int(round(max(35.0, min(88.0, 68 + (v - 50) / 4.0))))
+        oppose = int(round(max(8.0, min(40.0, 21 - (v - 50) / 6.0))))
+        risk = int(round(max(15.0, min(85.0, 42 + abs(v - 50) / 8.0))))
+        fairness = 73
+        live_info = {"used": True, "value": v, "url": live.get("url", ""), "ms": live.get("ms", 0)}
+    elif data_source and data_source != "系统内置模拟参数":
+        # 实时拉取不可用/未启用：回退公开数据校准基线
         approve += 2
         oppose -= 2
         risk -= 4
@@ -163,11 +174,16 @@ def simulate_metrics(scope, strength, data_source=""):
     hole = "偏高" if risk >= 50 else ("中等" if risk >= 35 else "较低")
     rec_plan = "试点方案" if risk >= 55 else ("限制方案" if risk >= 35 else "温和方案")
     src_label = data_source or "系统内置模拟参数"
+    if live_used:
+        basis = "实时拉取自公开数据源（%s），代表性比例 %s%%（耗时 %sms）" % (
+            live_info["url"], live_info["value"], live_info["ms"])
+    elif data_source:
+        basis = "公开数据校准基线（实时拉取不可用，基于所选官方公开数据源预设校准）"
+    else:
+        basis = "系统内置模拟参数基线（基于场景模板推算）"
     return {"approve": approve, "oppose": oppose, "risk": risk, "fairness": fairness,
             "diff": diff, "hole": hole, "recPlan": rec_plan, "scope": scope, "strength": strength,
-            "data_source": src_label,
-            "source_basis": ("公开数据校准基线（基于所选官方公开数据源推算）" if data_source
-                             else "系统内置模拟参数基线（基于场景模板推算）")}
+            "data_source": src_label, "source_basis": basis, "live": live_info}
 
 
 def rec_desc(s, c, rec_plan):
