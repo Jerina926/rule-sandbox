@@ -12,8 +12,8 @@ mcp = FastMCP("risk-chain")
 
 
 @mcp.tool()
-def simulate_metrics(scope: str, strength: str) -> dict:
-    return engine.simulate_metrics(scope, strength)
+def simulate_metrics(scope: str, strength: str, data_source: str = "") -> dict:
+    return engine.simulate_metrics(scope, strength, data_source)
 
 
 @mcp.tool()

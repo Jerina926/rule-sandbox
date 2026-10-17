@@ -131,12 +131,17 @@ def build_questionnaire(society_id, category_name, content):
     ]
 
 
-def simulate_metrics(scope, strength):
+def simulate_metrics(scope, strength, data_source=""):
     if scope not in SCOPE_KEYS:
         scope = "部分群体"
     if strength not in STRENGTH_KEYS:
         strength = "中等"
     approve, oppose, risk, fairness = 68, 21, 42, 73
+    # 公开数据校准：有官方公开数据支撑时，支持度更明确、风险感知更可控（基线偏移）
+    if data_source and data_source != "系统内置模拟参数":
+        approve += 2
+        oppose -= 2
+        risk -= 4
     if scope == "全体推行":
         risk += 12
         oppose += 6
@@ -157,8 +162,12 @@ def simulate_metrics(scope, strength):
     diff = "偏高" if (risk > 62 or (scope == "全体推行" and strength == "严格")) else ("较低" if (risk < 30 and scope == "小范围试点") else "中等")
     hole = "偏高" if risk >= 50 else ("中等" if risk >= 35 else "较低")
     rec_plan = "试点方案" if risk >= 55 else ("限制方案" if risk >= 35 else "温和方案")
+    src_label = data_source or "系统内置模拟参数"
     return {"approve": approve, "oppose": oppose, "risk": risk, "fairness": fairness,
-            "diff": diff, "hole": hole, "recPlan": rec_plan, "scope": scope, "strength": strength}
+            "diff": diff, "hole": hole, "recPlan": rec_plan, "scope": scope, "strength": strength,
+            "data_source": src_label,
+            "source_basis": ("公开数据校准基线（基于所选官方公开数据源推算）" if data_source
+                             else "系统内置模拟参数基线（基于场景模板推算）")}
 
 
 def rec_desc(s, c, rec_plan):

@@ -49,6 +49,8 @@ class Planner:
         society_id = request["society_id"]
         content = request["content"]
         allow_inference = bool(request.get("allow_inference"))
+        data_source = request.get("data_source", "") or ""
+        src_label = data_source or "系统内置模拟参数"
         trace = []
 
         ident = await self._call("identify", {"society_id": society_id, "content": content},
@@ -89,8 +91,10 @@ class Planner:
             lambda: {"sections": engine.build_questionnaire(society_id, category_name, content)}, trace)
 
         metrics = await self._call(
-            "metrics", {"scope": request.get("scope", "部分群体"), "strength": request.get("strength", "中等")},
-            lambda: engine.simulate_metrics(request.get("scope", "部分群体"), request.get("strength", "中等")), trace)
+            "metrics", {"scope": request.get("scope", "部分群体"), "strength": request.get("strength", "中等"),
+                        "data_source": data_source},
+            lambda: engine.simulate_metrics(request.get("scope", "部分群体"), request.get("strength", "中等"),
+                                            data_source), trace)
 
         groups = await self._call(
             "groups", {"society_id": society_id, "category_name": category_name},
@@ -137,6 +141,7 @@ class Planner:
                 "benefits": ident.get("benefits", []),
                 "costs": ident.get("costs", []),
                 "risks": ident.get("risks", []),
+                "data_source": src_label,
             },
             "content": content,
             "goal": request.get("goal", ""),
@@ -146,14 +151,14 @@ class Planner:
             "costs": ident.get("costs", []),
             "risks": ident.get("risks", []),
             "data_needs": ident.get("data_needs", ""),
-            "questionnaire": {"sections": questionnaire.get("sections", [])},
+            "questionnaire": {"sections": questionnaire.get("sections", []), "data_source": src_label},
             "metrics": metrics,
-            "groups": groups.get("groups", []),
-            "chains": chains,
-            "vulns": warned.get("vulns", []),
+            "groups": [dict(g, data_source=src_label) for g in groups.get("groups", [])],
+            "chains": dict(chains, data_source=src_label),
+            "vulns": [dict(v, data_source=src_label) for v in warned.get("vulns", [])],
             "audit": warned.get("audit", {}),
-            "plans": plans,
-            "rec": rec,
+            "plans": [dict(p, data_source=src_label) for p in plans],
+            "rec": dict(rec, data_source=src_label),
             "conclusion": conclusion_html,
             "llm_mode": llm_mode,
         }
