@@ -7,14 +7,17 @@
 - 未配置时全部静默跳过，不影响本地/原有运行
 """
 import base64
+import io
 import json
 import os
 import sqlite3
 import urllib.request
+import zipfile
 
 _API = "https://api.github.com"
 _BRANCH = "db-snapshot"
 _FILE = "rule_sandbox.db"
+_SESSIONS_FILE = "sessions.zip"
 
 
 def _conf():
@@ -96,4 +99,54 @@ def backup(db_path):
         return True
     except Exception as e:
         print("DB backup failed:", e, flush=True)
+        return False
+
+
+def restore_sessions(sessions_dir):
+    """启动时调用：本地 sessions 目录无任何会话 JSON 时从 GitHub 恢复。返回是否执行了恢复。"""
+    token, repo = _conf()
+    if not enabled():
+        return False
+    try:
+        os.makedirs(sessions_dir, exist_ok=True)
+        if any(f.endswith(".json") for f in os.listdir(sessions_dir)):
+            return False
+        content = _req("GET", f"{_API}/repos/{repo}/contents/{_SESSIONS_FILE}?ref={_BRANCH}", token)
+        data = base64.b64decode(content["content"])
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = [n for n in zf.namelist() if n.endswith(".json")]
+            zf.extractall(sessions_dir)
+        print(f"Sessions restored from GitHub backup: {len(names)} files -> {sessions_dir}", flush=True)
+        return True
+    except Exception as e:
+        print("Sessions restore skipped:", e, flush=True)
+        return False
+
+
+def backup_sessions(sessions_dir):
+    """把 sessions 目录下的会话 JSON 打包成 sessions.zip 上传到 db-snapshot 分支。返回是否成功。"""
+    token, repo = _conf()
+    if not enabled() or not os.path.isdir(sessions_dir):
+        return False
+    files = sorted(f for f in os.listdir(sessions_dir) if f.endswith(".json"))
+    if not files:
+        return False
+    try:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in files:
+                zf.write(os.path.join(sessions_dir, f), f)
+        blob = base64.b64encode(buf.getvalue()).decode()
+        sha = _ensure_branch(token, repo)
+        try:
+            old = _req("GET", f"{_API}/repos/{repo}/contents/{_SESSIONS_FILE}?ref={_BRANCH}", token)
+            payload = {"message": "chore: sessions snapshot", "branch": _BRANCH,
+                       "content": blob, "sha": old["sha"]}
+        except Exception:
+            payload = {"message": "chore: sessions snapshot", "branch": _BRANCH, "content": blob}
+        _req("PUT", f"{_API}/repos/{repo}/contents/{_SESSIONS_FILE}", token, payload)
+        print(f"Sessions backed up to GitHub: {len(files)} files", flush=True)
+        return True
+    except Exception as e:
+        print("Sessions backup failed:", e, flush=True)
         return False
