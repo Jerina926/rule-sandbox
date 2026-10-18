@@ -1,4 +1,6 @@
 import re
+from html import escape as _esc
+
 from knowledge import kb
 
 SCOPE_KEYS = ("小范围试点", "部分群体", "全体推行")
@@ -536,7 +538,7 @@ def conclusion(society_id, category_name, content, ident, metrics):
     return ('系统识别场景：<b>%s · %s</b>（后端 MCP 流水线推演）。在虚拟社会中针对“<b>%s</b>”的推演显示：'
             '该发布内容<b>具有一定可行性</b>，预计总体赞成度较高（<b>%d%%</b>），但存在<b>「%s」</b>等规则漏洞与'
             '<b>潜在受损主体</b>（%s）受益不均的风险（风险指数 <b>%d/100</b>）。建议采用<b>「%s」</b>：%s，并设置限制条件和反馈机制。'
-            ) % (s["name"], c["name"], content, metrics["approve"], vuln0, subs["v"], metrics["risk"],
+            ) % (s["name"], c["name"], _esc(content), metrics["approve"], vuln0, subs["v"], metrics["risk"],
                  metrics["recPlan"], rec_desc(s, c, metrics["recPlan"]))
 
 
@@ -560,7 +562,7 @@ def build_report(society_id, category_name, content, ident, metrics, chains, vul
         {"t": "一、发布内容概述", "html": "<p>本次试运行的分析对象为：<b>“%s”</b>。规则属性设定为：发布目标「%s」、发布范围「%s」、规则强度「%s」。识别置信方式：%s。本会话累计完成 <b>第 %d 次试运行</b>。</p>"
          "<p><b>本结果受以下规则属性影响：</b><br>发布目标「%s」：%s<br>发布范围「%s」：%s<br>规则强度「%s」：%s</p>"
          "<p>核心推演参数：综合支持度 <b>%s</b>、综合风险值 <b>%s</b>、受影响人数约 <b>%s</b> 人（范围因子 %s × 群体相关系数 %s，基准人口 %s）。</p>"
-         % (content, goal, scope, strength, conf, run_index,
+         % (_esc(content), _esc(goal), _esc(scope), _esc(strength), conf, run_index,
             ab["goal"], ab["goal_effect"], ab["scope"], ab["scope_effect"], ab["strength"], ab["strength_effect"],
             metrics["composite"]["support"], metrics["composite"]["risk"],
             "{:,}".format(metrics["composite"]["affected"]),
@@ -575,7 +577,7 @@ def build_report(society_id, category_name, content, ident, metrics, chains, vul
          '<div class="kv"><div class="k">主要群体</div><div class="v">%s</div></div></div>'
          % (s["ico"], s["name"], c["name"], c["desc"], subs["d"], subs["i"], subs["m"], subs["v"], subs["h"], s["groups"])},
         {"t": "三、数据来源", "html": "<p>本次推演使用的数据来源为：<b>%s</b>；公开数据（%s）用于校准主体规模与行为基线。问卷统计按参数转换表映射为初始赞成度、成本感知、公平风险、漏洞风险与行为变化概率等推演参数。</p>"
-         % (src, s["data"])},
+         % (_esc(src), s["data"])},
         {"t": "四、主体反应（五类角色）", "html": "<p>推演显示五类主体对同一规则的反应存在显著差异：</p><ul>"
          "<li><b>支持与观望</b>：直接受影响主体（%s）预期受益，赞成度约 72%%；间接受影响主体（%s）态度中立（约 54%%），短期以观望为主。</li>"
          "<li><b>反对与投诉</b>：潜在受损主体（%s）感知成本增加或受益不均，赞成度仅约 24%%，是投诉与抵触的主要来源。</li>"
