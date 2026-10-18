@@ -151,10 +151,15 @@ def rule_attribute_profile(goal, scope, strength):
     }
 
 
-def group_dynamics(goal="提高满意度", scope="部分群体", strength="中等", total_pop=100000):
+def group_dynamics(goal="提高满意度", scope="部分群体", strength="中等", total_pop=None):
     """核心计算：群体支持度_i = 基础支持度 + 目标匹配度 - 强度抵触度 - 范围公平损失；
     风险值_i = 基础风险 × scopeFactor × strengthRiskFactor × 群体脆弱性；
-    综合支持度/风险 = Σ(值×人数) ÷ 总人数；受影响人数 = 总人数 × scopeFactor × 群体相关系数。"""
+    综合支持度/风险 = Σ(值×人数) ÷ 总人数；
+    受影响人数 = min(总人数 × scopeFactor × 群体相关系数, 总人数)，不得超过当前虚拟社会总人数。"""
+    if total_pop is None:
+        total_pop = 100000
+    else:
+        total_pop = max(0, int(total_pop) or 100000)
     ra = rule_attribute_profile(goal, scope, strength)
     gw, sf, srf = ra["goal_weights"], ra["scope_factor"], ra["strength_risk_factor"]
     resistance = ra["resistance"]
@@ -185,8 +190,10 @@ def group_dynamics(goal="提高满意度", scope="部分群体", strength="中�
         t_w += w
         corr_sum += corr * w
     corr_avg = corr_sum / t_w
+    raw_affected = total_pop * sf * corr_avg
+    affected = min(int(round(raw_affected)), total_pop)
     return {"groups": rows, "support": round(t_sup / t_w, 1), "risk": round(t_risk / t_w, 1),
-            "affected": round(total_pop * sf * corr_avg), "total_pop": total_pop,
+            "affected": affected, "total_pop": total_pop,
             "scope_factor": sf, "correlation": round(corr_avg, 2)}
 
 
@@ -297,12 +304,13 @@ def build_questionnaire(society_id, category_name, content):
     ]
 
 
-def simulate_metrics(goal="提高满意度", scope="部分群体", strength="中等", data_source="", live=None):
+def simulate_metrics(goal="提高满意度", scope="部分群体", strength="中等", data_source="", live=None, total_pop=None):
     """推演指标：基础基线 + 发布目标(goalWeights) + 发布范围(scopeFactor) + 规则强度(strengthFactor) + 实时/公开数据校准。
 
     发布目标影响：可能收益/可能成本/群体支持度/满意度/公平感知/最终方案评分；
     发布范围影响：受影响人数/风险传播范围/总收益/总成本/舆情扩散/风险链长度/执行难度/公平性评价；
     规则强度影响：执行效果/规则遵守率/支持度/抵触程度/违规行为/管理成本/冲突风险/漏洞利用概率。
+    total_pop：当前虚拟社会总人数（默认 100000），受影响人数按 min(总人数 × scopeFactor × 群体相关系数, 总人数) 封顶。
     """
     if goal not in GOAL_KEYS:
         goal = "提高满意度"
@@ -312,7 +320,7 @@ def simulate_metrics(goal="提高满意度", scope="部分群体", strength="中
         strength = "中等"
     ra = rule_attribute_profile(goal, scope, strength)
     gw, sf, st = ra["goal_weights"], ra["scope_factor"], ra["strength_factor"]
-    dyn = group_dynamics(goal, scope, strength)
+    dyn = group_dynamics(goal, scope, strength, total_pop)
     live_used = False
     live_info = {}
     if live and live.get("ok"):
