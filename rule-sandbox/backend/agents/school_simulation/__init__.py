@@ -101,20 +101,21 @@ def run_fusion(
     content: str = "",
     category_hint: str = "",
 ) -> Dict[str, Any]:
-    """
-    完整执行：人口比例 → 校准 → 虚拟人物侧 → 问卷侧 → 双源融合 → 群体差异。
-    """
+    """完整执行：人口比例 → 校准 → 虚拟人物侧 → 问卷侧 → 双源融合 → 群体差异。"""
+    # 回退显性化：任何静默回退（默认权重/默认指标值）都记入 fallbacks，随 API 返回对外可见
+    fallbacks: List[str] = []
+
     # 1. 校准后比例
     cal = compute_calibrated_proportions(scale, calibration, base_demographics=base_demographics)
 
     # 2. 虚拟人物侧
-    p_side = compute_persona_side(cal["proportions"])
+    p_side = compute_persona_side(cal["proportions"], fallbacks=fallbacks)
 
     # 3. 问卷侧
-    q_side = build_questionnaire_side(metrics, questionnaire_data)
+    q_side = build_questionnaire_side(metrics, questionnaire_data, fallbacks=fallbacks)
 
     # 4. 归一权重
-    w = normalize_weights(weights)
+    w = normalize_weights(weights, fallbacks=fallbacks)
 
     # 5. 融合
     fused = fuse(q_side, p_side, w)
@@ -155,6 +156,11 @@ def run_fusion(
         "fusion_basis": fusion_basis,
         "persona_network": network,
         "recommended_plan": _recommend_plan(fused["fused"]),
+        # 回退显性化：默认值参与融合的完整明细（空列表 = 输入完整有效，未触发任何回退）
+        "fallbacks": fallbacks,
+        "fallback_note": ("未触发任何数据回退：输入字段完整有效" if not fallbacks
+                          else "触发了 %d 处数据回退（详见 fallbacks 明细），相关指标以默认值参与融合"
+                               % len(fallbacks)),
     }
 
 

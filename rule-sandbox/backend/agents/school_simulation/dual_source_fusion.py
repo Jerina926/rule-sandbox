@@ -38,6 +38,7 @@ def compute_persona_side(
     proportions: Dict[str, float],
     risk_tilt_by_archetype: Optional[Dict[str, int]] = None,
     pressure_boost: float = 1.0,
+    fallbacks: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     根据人群比例 + 态度 + 风险倾向 + 执行压力权重，计算虚拟人物侧 6 项指标。
@@ -121,6 +122,12 @@ def compute_persona_side(
     persona_fair = (f_num / f_den) if f_den > 0 else 60.0
     persona_vuln = (v_num / v_den) if v_den > 0 else 30.0
 
+    # 回退显性化：人群比例为空或权重合计为 0 时，上述默认值实际参与计算，必须对外可见
+    if fallbacks is not None and any(d <= 0 for d in (s_den, o_den, r_den, e_den, f_den, v_den)):
+        fallbacks.append(
+            "persona_side：人群比例为空或权重合计为 0，六项指标（支持/反对/风险/执行压力/公平/漏洞）"
+            "回退默认值 50/50/30/30/60/30")
+
     # 归一到 0~100
     persona_exec = max(0.0, min(100.0, persona_exec))
 
@@ -139,24 +146,49 @@ def compute_persona_side(
 # 问卷侧：默认模拟数据（来自 analysis.metrics + questionnaire）
 # ---------------------------------------------------------------------------
 
-def build_questionnaire_side(metrics: Dict[str, Any], questionnaire_data: Dict[str, Any] = None) -> Dict[str, Any]:
+def build_questionnaire_side(metrics: Dict[str, Any], questionnaire_data: Dict[str, Any] = None,
+                             fallbacks: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     根据 Planner 的 metrics 构造问卷侧数据。如有真实问卷数据则合并覆盖。
+    缺失 / 非数值字段回退默认值，并将回退明细写入 fallbacks（显性可见）。
     """
-    q = {
-        "approve": float(metrics.get("approve", 50)),
-        "oppose": float(metrics.get("oppose", 30)),
-        "risk_perception": float(metrics.get("risk", 35)),
-        "execution_difficulty": float(metrics.get("diff", 40)),
-        "fairness_perception": float(metrics.get("fair", 70)),
-        "vuln_perception": float(metrics.get("vuln", 30)),
-        "is_simulated": True,
-    }
+    key_map = [("approve", "approve", 50), ("oppose", "oppose", 30),
+               ("risk", "risk_perception", 35), ("diff", "execution_difficulty", 40),
+               ("fair", "fairness_perception", 70), ("vuln", "vuln_perception", 30)]
+    q: Dict[str, Any] = {"is_simulated": True}
+    bad = []
+    for src_key, dst_key, dv in key_map:
+        val = metrics.get(src_key) if isinstance(metrics, dict) else None
+        ok = False
+        if val is not None:
+            try:
+                f = float(val) if not isinstance(val, bool) else float(dv)
+                if f == f:  # 非 NaN
+                    q[dst_key] = f
+                    ok = True
+            except Exception:
+                pass
+        if not ok:
+            q[dst_key] = float(dv)
+            bad.append(src_key)
+    if bad and fallbacks is not None:
+        fallbacks.append("questionnaire_side：指标 %s 缺失或非数值，已回退默认值" % "、".join(bad))
     if questionnaire_data:
-        for k in ("approve", "oppose", "risk_perception", "execution_difficulty",
-                  "fairness_perception", "vuln_perception"):
-            if k in questionnaire_data and questionnaire_data[k] is not None:
-                q[k] = float(questionnaire_data[k])
+        for dst_key in ("approve", "oppose", "risk_perception", "execution_difficulty",
+                        "fairness_perception", "vuln_perception"):
+            v = questionnaire_data.get(dst_key)
+            if v is None:
+                continue
+            try:
+                f = float(v) if not isinstance(v, bool) else None
+                if f is not None and f == f:
+                    q[dst_key] = f
+                else:
+                    if fallbacks is not None:
+                        fallbacks.append("questionnaire_side：导入问卷字段 %s 非法（%r），未覆盖模拟值" % (dst_key, v))
+            except Exception:
+                if fallbacks is not None:
+                    fallbacks.append("questionnaire_side：导入问卷字段 %s 非法（%r），未覆盖模拟值" % (dst_key, v))
         if questionnaire_data.get("source") == "user_imported":
             q["is_simulated"] = False
     return q
@@ -166,18 +198,26 @@ def build_questionnaire_side(metrics: Dict[str, Any], questionnaire_data: Dict[s
 # 双源融合
 # ---------------------------------------------------------------------------
 
-def normalize_weights(weights: Optional[Dict[str, float]]) -> Dict[str, float]:
+def normalize_weights(weights: Optional[Dict[str, float]],
+                      fallbacks: Optional[List[str]] = None) -> Dict[str, float]:
     """
     确保问卷 + 虚拟人物权重总和为 1。
     默认 0.6 + 0.4。
     """
     if not weights:
+        if fallbacks is not None:
+            fallbacks.append("weights：未提供权重，回退默认 60% 问卷 + 40% 虚拟人物")
         return {"questionnaire": 0.6, "persona": 0.4}
-    q = float(weights.get("questionnaire", 0.6))
-    p = float(weights.get("persona", 0.4))
+    try:
+        q = float(weights.get("questionnaire", 0.6))
+        p = float(weights.get("persona", 0.4))
+    except Exception:
+        q, p = 0.0, 0.0
     # 若总和为 0 或非数，回退默认
     s = q + p
     if s <= 0 or s != s:  # NaN 保护
+        if fallbacks is not None:
+            fallbacks.append("weights：权重缺失或非法（总和≤0 或 NaN），回退默认 60% 问卷 + 40% 虚拟人物")
         return {"questionnaire": 0.6, "persona": 0.4}
     return {"questionnaire": round(q / s, 4), "persona": round(p / s, 4)}
 
