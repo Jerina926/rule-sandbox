@@ -99,11 +99,16 @@ class Planner:
         data_source_url = request.get("data_source_url", "") or ""
         live = await public_fetch.try_live_fetch(data_source_url) if data_source_url \
             else {"ok": False, "reason": "no_url", "ms": 0}
+        # 当前虚拟社会总人数：受影响人数 = min(总人数 × scopeFactor × corr, 总人数)
+        try:
+            total_pop = int(request.get("total_pop") or 0) or None
+        except (TypeError, ValueError):
+            total_pop = None
 
         metrics = await self._call(
             "metrics", {"goal": goal, "scope": scope, "strength": strength,
-                        "data_source": data_source, "live": live},
-            lambda: engine.simulate_metrics(goal, scope, strength, data_source, live), trace)
+                        "data_source": data_source, "live": live, "total_pop": total_pop},
+            lambda: engine.simulate_metrics(goal, scope, strength, data_source, live, total_pop=total_pop), trace)
 
         groups = await self._call(
             "groups", {"society_id": society_id, "category_name": category_name,
