@@ -50,6 +50,7 @@ class AnalyzeRequest(BaseModel):
     allow_inference: bool = False
     data_source: str = ""
     data_source_url: str = ""
+    total_pop: int | None = None  # 当前虚拟社会总人数：受影响人数 = min(总人数 × scopeFactor × corr, 总人数)
 
 
 @router.get("/health")
