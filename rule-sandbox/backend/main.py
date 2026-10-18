@@ -10,6 +10,7 @@ import yaml
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.agents.planner import Planner
@@ -54,14 +55,18 @@ def cors_origins(cfg):
     return out
 
 
-async def _backup_loop():
-    """每 RSB_BACKUP_INTERVAL 秒（默认 1800）把 SQLite 备份到 GitHub；未配置 token 时空转。"""
+async def _backup_loop(sessions_dir):
+    """每 RSB_BACKUP_INTERVAL 秒（默认 1800）把 SQLite 与会话 JSON 备份到 GitHub；未配置 token 时空转。"""
     while True:
         await asyncio.sleep(int(os.environ.get("RSB_BACKUP_INTERVAL", "1800")))
         try:
             await asyncio.to_thread(db_backup.backup, resolve_db_path())
         except Exception as e:
             print("DB backup warning:", e)
+        try:
+            await asyncio.to_thread(db_backup.backup_sessions, sessions_dir)
+        except Exception as e:
+            print("Sessions backup warning:", e)
 
 
 def create_app(cfg=None):
@@ -76,11 +81,30 @@ def create_app(cfg=None):
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    # 写操作鉴权：POST/PUT/DELETE 请求的 /api/* 必须携带与 RSB_API_KEY 一致的 X-API-Key，
+    # 用于挡住爬虫与误操作；未配置 RSB_API_KEY 时跳过校验（保持零配置可运行）。
+    @app.middleware("http")
+    async def api_key_guard(request, call_next):
+        expected = os.environ.get("RSB_API_KEY", "").strip()
+        if (expected and request.method in ("POST", "PUT", "PATCH", "DELETE")
+                and request.url.path.startswith("/api/")):
+            provided = request.headers.get("X-API-Key", "").strip()
+            if not provided or provided != expected:
+                return JSONResponse(status_code=401, content={"detail": "无效或缺失的 X-API-Key"})
+        return await call_next(request)
+
+    print("Write-op API key guard:",
+          "enabled" if os.environ.get("RSB_API_KEY", "").strip() else "disabled (RSB_API_KEY not set)",
+          flush=True)
+
     app.state.manager = MCPManager(cfg)
     app.state.gateway = LLMGateway(cfg.get("llm", {}))
     app.state.validator = Validator()
     app.state.planner = Planner(app.state.manager, app.state.gateway, app.state.validator)
-    app.state.store = SessionStore(os.path.join(ROOT, cfg.get("session", {}).get("dir", "backend/data/sessions")))
+    session_dir = os.path.join(ROOT, cfg.get("session", {}).get("dir", "backend/data/sessions"))
+    app.state.store = SessionStore(session_dir)
+    app.state.sessions_dir = session_dir
     app.include_router(routes.router)
 
     @app.on_event("startup")
@@ -95,13 +119,17 @@ def create_app(cfg=None):
         except Exception as e:
             print("DB restore warning:", e)
         try:
+            await asyncio.to_thread(db_backup.restore_sessions, app.state.sessions_dir)
+        except Exception as e:
+            print("Sessions restore warning:", e)
+        try:
             db_path = db_init_schema()
             print("DB initialized:", db_path)
             app.state.db_path = db_path
         except Exception as e:
             print("DB init warning:", e)
             app.state.db_path = None
-        asyncio.create_task(_backup_loop())
+        asyncio.create_task(_backup_loop(app.state.sessions_dir))
 
     @app.on_event("shutdown")
     async def _shutdown():
