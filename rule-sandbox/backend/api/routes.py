@@ -18,6 +18,27 @@ router = APIRouter(prefix="/api")
 
 _ANALYZE_THROTTLE_SECONDS = 30  # 同一来源两次 /api/analyze 的最小间隔（内存级，重启重置）
 
+# 融合指标数值化映射：客户端可能传入「偏低/中等/偏高」等中文分级字符串（如 /api/analyze 返回的 diff/hole），
+# 统一转换为数值后再进入双源融合，避免 float() 直接转换字符串抛异常导致 500
+_METRIC_TEXT_MAP = {"低": 25, "较低": 30, "中": 50, "中等": 50, "较高": 70, "偏高": 75, "高": 75}
+
+
+def _metric_num(v, default=50):
+    """安全数值化：None / 布尔 / 中文分级字符串 / NaN 一律回退 default。"""
+    if v is None or isinstance(v, bool):
+        return default
+    if isinstance(v, (int, float)):
+        f = float(v)
+        return default if f != f else f  # NaN 防御
+    s = str(v).strip()
+    if s in _METRIC_TEXT_MAP:
+        return float(_METRIC_TEXT_MAP[s])
+    try:
+        f = float(s)
+        return default if f != f else f
+    except Exception:
+        return default
+
 
 class AnalyzeRequest(BaseModel):
     society_id: str
@@ -80,8 +101,10 @@ class ExplainRequest(BaseModel):
     society_id: str
     category_name: str = ""
     content: str = ""
+    goal: str = "提高满意度"
     scope: str = "部分群体"
     strength: str = "中等"
+    data_source: str = ""
 
 
 @router.get("/models/catalog")
@@ -102,7 +125,8 @@ async def explain(req: ExplainRequest):
             cat = sd["result"]["category_name"]
         else:
             return {"status": "error", "message": "未能识别规则类别，请提供 category_name 或检查 content 关键词"}
-    out = em_run_all(req.society_id, cat, req.content, req.scope, req.strength)
+    out = em_run_all(req.society_id, cat, req.content, req.scope, req.strength,
+                     goal=req.goal, data_source=req.data_source)
     return {"status": "ok", "society_id": req.society_id, "category_name": cat,
             "scope": req.scope, "strength": req.strength, "explanation": out}
 
@@ -152,7 +176,9 @@ async def analyze(req: AnalyzeRequest, request: Request):
             cat_name = result["analysis"]["identification"]["category"]["name"]
             explanation = em_run_all(
                 req.society_id, cat_name, content,
-                payload.get("scope", "部分群体"), payload.get("strength", "中等"))
+                payload.get("scope", "部分群体"), payload.get("strength", "中等"),
+                goal=payload.get("goal", "提高满意度"),
+                data_source=payload.get("data_source") or "")
             result["analysis"]["explanation"] = explanation
         except Exception as e:
             result["analysis"]["explanation"] = {"_error": str(e)}
@@ -221,6 +247,8 @@ async def analyze(req: AnalyzeRequest, request: Request):
                     "fused": fusion["fused"],
                     "weight_explanation": fusion["fused"]["weight_explanation"],
                     "recommended_plan": fusion["recommended_plan"],
+                    "fallbacks": fusion.get("fallbacks", []),
+                    "fallback_note": fusion.get("fallback_note", ""),
                 },
                 # V4.0 新增：虚拟人物反应摘要 + 双源融合依据 + 人物关系网络
                 "reaction_summary": fusion.get("reaction_summary", {}),
@@ -474,9 +502,16 @@ class FusionRequest(BaseModel):
 async def post_fusion(req: FusionRequest):
     """
     双源融合：人口比例 → 校准 → 虚拟人物侧 → 问卷侧 → 双源融合 → 群体差异。
+    客户端 metrics 可能携带「偏低/中等/偏高」等中文分级字符串，先统一数值化再融合。
     """
-    metrics = req.metrics or {
-        "approve": 50, "oppose": 30, "risk": 35, "diff": 40, "fair": 70, "vuln": 30,
+    raw = req.metrics or {}
+    metrics = {
+        "approve": _metric_num(raw.get("approve"), 50),
+        "oppose":  _metric_num(raw.get("oppose"), 30),
+        "risk":    _metric_num(raw.get("risk"), 35),
+        "diff":    _metric_num(raw.get("diff"), 40),
+        "fair":    _metric_num(raw.get("fair", raw.get("fairness")), 70),
+        "vuln":    _metric_num(raw.get("vuln", raw.get("hole")), 30),
     }
     return run_fusion(
         req.scale, req.calibration, metrics,
