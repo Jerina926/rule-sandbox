@@ -38,6 +38,18 @@ def _safe_json_loads(s, default=None):
         return default
 
 
+def _to_text(v):
+    """把任意值安全转成可绑定到 TEXT 列的值。
+    dict/list -> JSON 字符串；None -> 空串；其余 -> str 原样。"""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (dict, list)):
+        return _safe_json_dumps(v, "")
+    return str(v)
+
+
 # ============================================================
 # CasesRepo
 # ============================================================
@@ -76,12 +88,12 @@ class CasesRepo:
         metrics = analysis.get("metrics", {}) or {}
         params = [
             case_id, session_id, run_index,
-            society.get("id") or (request or {}).get("society_id", ""),
-            cat.get("name") or "",
-            content,
-            analysis.get("goal") or (request or {}).get("goal", ""),
-            analysis.get("scope") or (request or {}).get("scope", ""),
-            analysis.get("strength") or (request or {}).get("strength", ""),
+            _to_text(society.get("id") or (request or {}).get("society_id", "")),
+            _to_text(cat.get("name") or ""),
+            _to_text(content),
+            _to_text(analysis.get("goal") or (request or {}).get("goal", "")),
+            _to_text(analysis.get("scope") or (request or {}).get("scope", "")),
+            _to_text(analysis.get("strength") or (request or {}).get("strength", "")),
             1 if ident.get("inferred") else 0,
             1 if (request or {}).get("allow_inference") else 0,
             status, error_message,
@@ -174,12 +186,12 @@ class CasesRepo:
                 " trace_json, report_md, explanation_json) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [case_id,
-                 analysis.get("conclusion", ""),
-                 analysis.get("llm_mode", ""),
+                 _to_text(analysis.get("conclusion", "")),
+                 _to_text(analysis.get("llm_mode", "")),
                  1 if validation.get("passed") else 0,
                  _safe_json_dumps(v_summary),
                  _safe_json_dumps(analysis.get("trace", [])),
-                 analysis.get("report", "") or "",
+                 _to_text(analysis.get("report", "")),
                  _safe_json_dumps(explanation)])
 
         return {"ok": True, "case_id": case_id,
