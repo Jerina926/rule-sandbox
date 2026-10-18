@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -13,6 +15,8 @@ from backend.agents.school_simulation import (
 from backend.db.store import CasesRepo, SourcesRepo
 
 router = APIRouter(prefix="/api")
+
+_ANALYZE_THROTTLE_SECONDS = 30  # 同一来源两次 /api/analyze 的最小间隔（内存级，重启重置）
 
 
 class AnalyzeRequest(BaseModel):
@@ -38,6 +42,7 @@ async def health(request: Request):
             "tools": tools or [],
             "error": st.manager.status.get(name, {}).get("error", ""),
         }
+    bs = getattr(st, "backup_status", {}) or {}
     return {
         "status": "ok",
         "mode": getattr(st, "mode", "agent"),
@@ -45,6 +50,12 @@ async def health(request: Request):
         "llm_mode": st.gateway.mode(),
         "sessions": len(st.store.list_sessions()),
         "servers": servers,
+        "backup": {
+            "enabled": bool(bs.get("enabled")),
+            "last_success": bs.get("last_success"),
+            "last_error": bs.get("last_error"),
+            "consecutive_failures": bs.get("consecutive_failures", 0),
+        },
     }
 
 
@@ -104,6 +115,18 @@ async def analyze(req: AnalyzeRequest, request: Request):
         raise HTTPException(status_code=400, detail="发布内容不能为空")
     if not kb.society(req.society_id):
         raise HTTPException(status_code=400, detail="未知社会类型: %s" % req.society_id)
+
+    # 内存级节流：同一来源 30 秒最多一次分析（重启即重置，仅用于挡刷）
+    throttle = getattr(st, "analyze_throttle", None)
+    if throttle is not None:
+        src = request.client.host if request.client else "unknown"
+        now = time.monotonic()
+        if now - throttle.get(src, 0.0) < _ANALYZE_THROTTLE_SECONDS:
+            raise HTTPException(status_code=429, detail="请求过于频繁，请30秒后再试")
+        throttle[src] = now
+        if len(throttle) > 4096:  # 防内存膨胀：顺带清理过期条目
+            st.analyze_throttle = {k: v for k, v in throttle.items()
+                                   if now - v < _ANALYZE_THROTTLE_SECONDS}
 
     if req.session_id:
         doc = st.store.get(req.session_id)
