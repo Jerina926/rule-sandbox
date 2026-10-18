@@ -1,4 +1,5 @@
 import time
+from html import escape as _esc
 
 from knowledge import engine
 from knowledge import public_fetch
@@ -141,7 +142,8 @@ class Planner:
         metrics["recDesc"] = engine.rec_desc(s, c, metrics.get("recPlan", "试点方案"))
         base_conclusion = engine.conclusion(society_id, category_name, content, ident, metrics)
         llm_text = self.gateway.complete(LLM_SYSTEM, _llm_prompt(ident, metrics, warned, rec, chains, content))
-        conclusion_html = llm_text if llm_text else base_conclusion
+        # llm_text 是纯文本结论，前端会按 HTML 渲染（innerHTML），必须先转义防注入
+        conclusion_html = _esc(llm_text) if llm_text else base_conclusion
         llm_mode = self.gateway.mode() if llm_text else (self.gateway.mode() + "(fallback:模板)" if self.gateway.enabled else "rule_engine")
 
         analysis = {

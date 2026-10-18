@@ -14,6 +14,11 @@ class SessionStore:
     def _path(self, sid):
         return os.path.join(self.dir, "%s.json" % sid)
 
+    def _load(self, path):
+        """无锁读取单个会话文件（调用方需自行持锁）。"""
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+
     def create(self):
         sid = uuid.uuid4().hex[:12]
         with self.lock:
@@ -27,8 +32,7 @@ class SessionStore:
         if not os.path.exists(path):
             return None
         with self.lock:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
+            return self._load(path)
 
     def list_sessions(self):
         out = []
@@ -47,18 +51,21 @@ class SessionStore:
         return out
 
     def add_run(self, sid, request, result):
-        doc = self.get(sid)
-        if doc is None:
-            doc = self.create()
-            sid = doc["session_id"]
-        doc["runs"].append({
-            "run_index": len(doc["runs"]) + 1,
-            "at": _now(),
-            "request": request,
-            "result": result,
-        })
-        doc["updated_at"] = _now()
+        # 读-改-写全程持锁：并发下不会因「读到旧 doc → 另一线程已写入 → 覆盖丢 run」而丢失记录
+        # （旧实现 get→修改→写 分三段加锁，存在竞态窗口）
         with self.lock:
+            path = self._path(sid)
+            doc = self._load(path) if os.path.exists(path) else None
+            if doc is None:
+                sid = uuid.uuid4().hex[:12]
+                doc = {"session_id": sid, "created_at": _now(), "runs": []}
+            doc["runs"].append({
+                "run_index": len(doc["runs"]) + 1,
+                "at": _now(),
+                "request": request,
+                "result": result,
+            })
+            doc["updated_at"] = _now()
             with open(self._path(sid), "w", encoding="utf-8") as f:
                 json.dump(doc, f, ensure_ascii=False, indent=1)
         return doc
