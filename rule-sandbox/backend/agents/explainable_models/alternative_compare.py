@@ -99,6 +99,12 @@ def run(society_id, category_name, metrics):
     basis.append(f"按 score 排序：{[p['name'] + '(' + str(p['score']) + ')' for p in scored]}")
     basis.append(f"系统综合推荐方案：{rec_plan}（来自支持度计算模型 3，受 risk 阈值驱动）")
 
+    # 置信度由方案得分区分度导出（先验数据可信度标注，非统计置信区间）
+    score_gap = min(1.0, max(p["score"] for p in scored) - min(p["score"] for p in scored))
+    confidence = round(min(0.90, 0.55 + 0.35 * score_gap), 2)
+    basis.append(f"confidence={confidence}：由 4 方案得分区分度导出（最高分−最低分 = {score_gap:.3f}，"
+                 f"公式 min(0.90, 0.55 + 0.35×区分度)），为内部可解释性标注，非统计置信区间")
+
     factors = []
     for p in scored:
         factors.append(Factor(
@@ -126,5 +132,5 @@ def run(society_id, category_name, metrics):
                         {"name": "国家发改委 · 多目标政策评估方法",
                          "url": "https://www.ndrc.gov.cn/",
                          "use": "方案对比的国内政策评估实践"}],
-        confidence=0.80,
+        confidence=confidence,
         processing_ms=_consume(t0)).as_dict()

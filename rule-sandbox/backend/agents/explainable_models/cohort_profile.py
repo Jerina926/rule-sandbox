@@ -110,6 +110,12 @@ def run(society_id, category_name):
     avg = round(sum(g["appr"] for g in groups) / len(groups), 1)
     basis.append(f"5 类支持度算术平均 = {avg}（参考画像基线）")
 
+    # 置信度由影响因子覆盖度导出（先验数据可信度标注，非统计置信区间）
+    total_overlaps = sum(g["matched_benefit"] + g["matched_cost"] for g in groups)
+    confidence = round(min(0.92, 0.55 + 0.05 * total_overlaps), 2)
+    basis.append(f"confidence={confidence}：由影响因子覆盖度导出（5 类主体与收益/成本关键词重合总数 = "
+                 f"{total_overlaps}，公式 min(0.92, 0.55 + 0.05×重合数)），为内部可解释性标注，非统计置信区间")
+
     return ModelOutput(
         model_name="cohort_profile", title="群体画像",
         description="把社会成员分成 5 类主体，逐类用基线 + 角色偏移 + 收益/成本匹配量化支持度，并解释每类主体的态度成因。",
@@ -125,5 +131,5 @@ def run(society_id, category_name):
                         {"name": "Schneider & Ingram 1993 · Policy Targeting and Social Construction",
                          "url": "https://www.jstor.org/stable/2132729",
                          "use": "政策遵从者画像理论"}],
-        confidence=0.85,
+        confidence=confidence,
         processing_ms=_consume(t0)).as_dict()

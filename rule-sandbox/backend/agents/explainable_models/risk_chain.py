@@ -97,6 +97,13 @@ def run(society_id, category_name, risk_score=42):
     basis.append(f"主链累积 score = {main_sum} → 影响指数：{impact_index}；备选链 score = {alt_sum}")
     basis.append(f"结合支持度风险指数 risk_score={risk_score}/100 ({risk_score_band}) → 综合冲击 = {combined}")
 
+    # 置信度由节点规则命中覆盖率导出（先验数据可信度标注，非统计置信区间）
+    node_all = main_m + alt_m
+    covered_nodes = sum(1 for n in node_all if "未命中" not in n["note"])
+    confidence = round(min(0.90, 0.50 + 0.35 * covered_nodes / max(1, len(node_all))), 2)
+    basis.append(f"confidence={confidence}：由节点规则命中覆盖率导出（{covered_nodes}/{len(node_all)} 个节点"
+                 f"命中强度/时滞/不可逆特征词），为内部可解释性标注，非统计置信区间")
+
     factors = []
     for n in main_m[1:-1]:  # 排除首尾固定节点
         factors.append(Factor(
@@ -121,5 +128,5 @@ def run(society_id, category_name, risk_score=42):
         evidence_refs=[{"name": "国家应急管理部 · 重特大事件案例库",
                          "url": "https://www.mem.gov.cn/",
                          "use": "节点风险等级的实证参照（公共事件影响度分级）"}],
-        confidence=0.82,
+        confidence=confidence,
         processing_ms=_consume(t0)).as_dict()

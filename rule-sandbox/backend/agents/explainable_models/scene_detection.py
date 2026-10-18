@@ -3,12 +3,13 @@
 输入：society_id, content
 输出：{society, category, direction, matched_kw, is_inferred, confidence, score, runner_up}
 
-算法（与 knowledge.engine.detect 完全一致但带有完整的解释）：
+算法（复刻 knowledge.engine.detect 的关键词命中/跨社会扫描/推断决策，并补充完整解释）：
   score(content, c) = Σ_{k∈c.kw} 1[k ∈ content]
   本社会内取 score 最高的类别作为 best_cat；
   其他社会若命中 ≥2 关键词 → 触发「跨社会警报」（mismatch）；
   若本社会完全无命中 → inferred = True（按 cats[0] 推断）；
   方向识别：放宽 / 收紧 / 取消 / 新增 / 调整。
+  注：平票时本模型按命中覆盖率二次排序，与 engine.detect 的「先到先得」可能存在微小差异。
 """
 from knowledge import kb
 from knowledge import engine as kn_engine
