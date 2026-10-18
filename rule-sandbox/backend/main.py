@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -55,18 +56,34 @@ def cors_origins(cfg):
     return out
 
 
-async def _backup_loop(sessions_dir):
+async def _backup_loop(sessions_dir, status):
     """每 RSB_BACKUP_INTERVAL 秒（默认 1800）把 SQLite 与会话 JSON 备份到 GitHub；未配置 token 时空转。"""
     while True:
         await asyncio.sleep(int(os.environ.get("RSB_BACKUP_INTERVAL", "1800")))
+        if not db_backup.enabled():
+            status["enabled"] = False
+            continue
+        status["enabled"] = True
+        fails = []
         try:
-            await asyncio.to_thread(db_backup.backup, resolve_db_path())
+            if not await asyncio.to_thread(db_backup.backup, resolve_db_path()):
+                fails.append("db")
         except Exception as e:
+            fails.append("db: %s" % e)
             print("DB backup warning:", e)
         try:
-            await asyncio.to_thread(db_backup.backup_sessions, sessions_dir)
+            if not await asyncio.to_thread(db_backup.backup_sessions, sessions_dir):
+                fails.append("sessions")
         except Exception as e:
+            fails.append("sessions: %s" % e)
             print("Sessions backup warning:", e)
+        if fails:
+            status["consecutive_failures"] += 1
+            status["last_error"] = ", ".join(fails)
+        else:
+            status["last_success"] = datetime.now().isoformat(timespec="seconds")
+            status["consecutive_failures"] = 0
+            status["last_error"] = None
 
 
 def create_app(cfg=None):
@@ -74,6 +91,8 @@ def create_app(cfg=None):
     app = FastAPI(title="规则沙盒：虚拟社会反应预演系统", version="pro-1.0")
     app.state.cfg = cfg
     app.state.mode = os.environ.get("RSB_MODE", cfg.get("server", {}).get("mode", "agent"))
+    app.state.backup_status = {"enabled": False, "last_success": None, "last_error": None, "consecutive_failures": 0}
+    app.state.analyze_throttle = {}
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins(cfg),
@@ -129,7 +148,8 @@ def create_app(cfg=None):
         except Exception as e:
             print("DB init warning:", e)
             app.state.db_path = None
-        asyncio.create_task(_backup_loop(app.state.sessions_dir))
+        app.state.backup_status["enabled"] = db_backup.enabled()
+        asyncio.create_task(_backup_loop(app.state.sessions_dir, app.state.backup_status))
 
     @app.on_event("shutdown")
     async def _shutdown():
