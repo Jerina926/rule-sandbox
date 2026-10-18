@@ -1020,6 +1020,12 @@
       <div class="note" id="srcPathHint"></div>
     </div>
 
+    <!-- 数据来源说明（按 virtualOnly / surveyOnly / surveyAndVirtual / publicData 动态展示） -->
+    <div class="card">
+      <h3><span class="ico">📋</span>数据来源说明</h3>
+      <div class="cred-box" id="srcSummary" style="margin-top:12px"></div>
+    </div>
+
     <!-- 问卷调查导入（互斥显示） -->
     <div class="card" id="surveyCard" style="display:none">
       <h3><span class="ico">📥</span>问卷调查导入 <span class="src-mode-badge">当前数据来源：问卷调查</span></h3>
@@ -1088,7 +1094,7 @@
     <div class="page-head">
       <div class="step-tag">STEP 09 / 14 · 行为推演</div>
       <h2 class="page-title">系统正在进行<span class="hl">虚拟社会行为推演</span></h1>
-      <p class="page-desc">系统将根据<b>本场景的五类主体画像、问卷参数和公开数据</b>，模拟发布内容在虚拟社会中的传播和反馈过程。</p>
+      <p class="page-desc" id="simDesc">系统将根据<b>本场景的五类主体画像、问卷参数和公开数据</b>，模拟发布内容在虚拟社会中的传播和反馈过程。</p>
     </div>
     <div class="id-banner" id="idBar7"></div>
     <div class="sim-stage">
@@ -1138,6 +1144,9 @@
     </div>
     <div class="metric-grid" id="metricGrid"></div>
 
+    <!-- 受影响人数计算依据（统一口径，第10/13/14步共用） -->
+    <div class="cred-box" id="affectedBasis" style="margin-top:14px"></div>
+
     <div id="noDataHint" class="no-data-hint" style="display:none"></div>
 
     <div class="ss-section-title">
@@ -1151,14 +1160,14 @@
       <summary class="rd-summary">
         <span class="ss-bar"></span>
         <span class="rd-title">详细分析</span>
-        <span class="rd-hint">三类数据来源对比 · 因素贡献 · 调整前后对比</span>
+        <span class="rd-hint" id="rdHint">三类数据来源对比 · 因素贡献 · 调整前后对比</span>
         <span class="rd-arrow">展开 ▾</span>
       </summary>
       <div class="rd-body">
         <div class="ss-section-title">
           <span class="ss-bar"></span>
-          <h2>三类数据来源对比</h2>
-          <span class="ss-hint">问卷数据 · 虚拟人群模拟 · 加权综合</span>
+          <h2 id="srcCompareTitle">三类数据来源对比</h2>
+          <span class="ss-hint" id="srcCompareHint">问卷数据 · 虚拟人群模拟 · 加权综合</span>
         </div>
         <div id="sourceCompare" class="source-compare"></div>
 
@@ -2016,7 +2025,7 @@ const TOTAL_STEPS = 14;
 
 const state = {
   page:1, soc:null, content:"", goal:"提高满意度", scope:"部分群体", strength:"中等",
-  visited:new Set([1]), simDone:false, dataSource:"", dataSourceUrl:"", selOpenUrl:"", selOpenName:"", hasRealData:false, useSurvey:true, usePersona:true,
+  visited:new Set([1]), simDone:false, dataSource:"virtualOnly", dataSourceLabel:"", dataSourceUrl:"", selOpenUrl:"", selOpenName:"", hasRealData:false, useSurvey:true, usePersona:true,
   cat:null, catSoc:null, matchedKw:null, inferred:false, pendingDet:null,
   qn:null, recPlan:"试点方案",
   recommendWeights:null, surveySampleCount:0, surveyValidRate:1.0, weightsUserSet:false, dataPath:null,
@@ -2182,7 +2191,7 @@ async function doParse(){
   state.content = $("ruleInput").value.trim();
   if(RSB.online){
     try{
-      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null, data_source: state.dataSource || "", data_source_url: state.dataSourceUrl || ""});
+      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null, data_source: state.dataSourceLabel || "", data_source_url: state.dataSourceUrl || "", total_pop: currentTotalPopulation() || null});
       if(res.status === "mismatch"){ applyRemoteMismatch(res); return; }
       if(res.status === "ok"){ applyRemoteAnalysis(res); return; }
     }catch(e){ console.warn("后端分析失败，回退本地引擎:", e); }
@@ -2279,7 +2288,7 @@ async function switchAndParse(id){
 async function forceInferParse(){
   if(RSB.online){
     try{
-      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null, allow_inference: true, data_source: state.dataSource || "", data_source_url: state.dataSourceUrl || ""});
+      const res = await apiPost("/api/analyze", {society_id: state.soc, content: state.content, goal: state.goal, scope: state.scope, strength: state.strength, session_id: state.sessionId || null, allow_inference: true, data_source: state.dataSourceLabel || "", data_source_url: state.dataSourceUrl || "", total_pop: currentTotalPopulation() || null});
       if(res.status === "ok"){ applyRemoteAnalysis(res); return; }
     }catch(e){ console.warn("后端推断分析失败，回退本地引擎:", e); }
   }
@@ -2507,12 +2516,14 @@ const OPEN_DATA_SOURCES = {
 function selectOpenSource(name, url){
   state.selOpenName = name; state.selOpenUrl = url;
   if(state.dataPath === "open"){
-    state.dataSource = "公开数据 · " + name;
+    state.dataSource = "publicData";
+    state.dataSourceLabel = "公开数据 · " + name;
     state.dataSourceUrl = url;
     const h = $("importHint");
     if(h) h.textContent = "已选定来源「" + name + "」——分析时将实时拉取该官方源数据；若拉取失败自动回退预设校准基线。";
   }
   renderOpenDataDetail();
+  renderSourceSummary();
 }
 
 /* 渲染当前社会类型的公开数据源详情（卡片可点选；默认选定首个非反爬源） */
@@ -2550,12 +2561,14 @@ function renderOpenDataDetail(){
 function selectDataPath(mode){
   state.dataPath = mode;
   if(mode === "survey"){
-    state.dataSource = "问卷调查";
+    state.dataSourceUrl = "";
     // 从 radio 重新同步 sourceRole（survey→surveyOnly, both→surveyAndVirtual, persona→surveyOnly 兜底）
     const v = document.querySelector('input[name="dataSourceMode"]:checked');
     const rm = v ? v.value : "both";
     if(rm === "persona"){ state.sourceRole = "surveyOnly"; state.useSurvey = true; state.usePersona = false; }
     else onSourceModeChange();
+    state.dataSource = state.sourceRole;
+    state.dataSourceLabel = "问卷调查";
     $("srcPathSelect").style.display = "none";
     $("surveyCard").style.display = "";
     $("openDataCard").style.display = "none";
@@ -2572,6 +2585,7 @@ function selectDataPath(mode){
     }
   } else {
     state.sourceRole = "publicData";
+    state.dataSource = "publicData";
     $("srcPathSelect").style.display = "none";
     $("surveyCard").style.display = "none";
     $("openDataCard").style.display = "";
@@ -2581,11 +2595,15 @@ function selectDataPath(mode){
     $("btnSim").textContent = "确认公开数据并进入推演 →";
   }
   $("srcPathHint").textContent = "";
+  renderSourceSummary();
 }
 function resetDataPath(){
   // 清除数据来源选择与旧状态：不沿用 surveyOnly / surveyAndVirtual / publicData
   state.dataPath = null;
   state.sourceRole = "virtualOnly";
+  state.dataSource = "virtualOnly";
+  state.dataSourceLabel = "";
+  state.dataSourceUrl = "";
   state.useSurvey = false;
   state.usePersona = true;
   state.openDataUsed = false;
@@ -2598,11 +2616,46 @@ function resetDataPath(){
   $("openDataCard").style.display = "none";
   $("btnSim").textContent = "下一步 →";
   $("importHint").textContent = "调查数据为可选资料。你可以导入调查数据，也可以使用公开数据，或直接使用虚拟人群模拟。";
+  renderSourceSummary();
 }
 function renderDataPathState(){
   if(state.dataPath === "survey"){ selectDataPath("survey"); }
   else if(state.dataPath === "open"){ selectDataPath("open"); }
   else { resetDataPath(); }
+}
+
+/* 第6页（导入数据）数据来源说明：按 sourceRole（virtualOnly / surveyOnly / surveyAndVirtual / publicData）动态展示 */
+function renderSourceSummary(){
+  const box = $("srcSummary");
+  if(!box) return;
+  const role = state.sourceRole || "virtualOnly";
+  const rows = {
+    virtualOnly: [
+      ["虚拟人群","已使用"],
+      ["调查问卷","未使用"],
+      ["公开数据","未使用"],
+      ["结果来源","当前社会类型对应的虚拟群体结构与模拟参数。"]
+    ],
+    surveyOnly: [
+      ["虚拟人群","未使用"],
+      ["调查问卷","已使用"],
+      ["公开数据","未使用"],
+      ["结果来源","导入的调查问卷数据与参数转换结果。"]
+    ],
+    surveyAndVirtual: [
+      ["虚拟人群","已使用"],
+      ["调查问卷","已使用"],
+      ["公开数据","未使用"],
+      ["结果来源","问卷数据与虚拟人群画像按当前权重融合。"]
+    ],
+    publicData: [
+      ["虚拟人群","已使用（群体结构基础）"],
+      ["调查问卷","未使用"],
+      ["公开数据","已使用"],
+      ["结果来源","公开数据来源与虚拟社会群体结构校准后的推演结果。"]
+    ]
+  }[role] || [];
+  box.innerHTML = rows.map(r => `<div class="cred-row"><span class="cred-key">${r[0]}</span><span class="cred-val">${r[1]}</span></div>`).join("");
 }
 
 /* 文件导入数据状态：empty / imported / parsed / ready / deleted / invalid */
@@ -2656,7 +2709,8 @@ function onFileChosen(input){
     importedAt: timeStr, sampleCount: n, invalidCount: invalid,
     status: "ready", participates: true
   };
-  state.dataSource = "问卷调查（" + f.name + "）";
+  state.dataSourceLabel = "问卷调查（" + f.name + "）";
+  if(state.sourceRole !== "publicData") state.dataSource = state.sourceRole || "surveyOnly";
   state.hasRealData = true;
   $("btnSim").disabled = false;
   $("fileActions").style.display = "";
@@ -2716,9 +2770,31 @@ const SIM_STEPS = [
 ];
 let simTimer = null;
 function runSimulation(){
+  // 行为推演说明文案按数据来源动态变化（禁止所有模式共用固定文案）
+  const simDescMap = {
+    virtualOnly: "系统将根据当前虚拟社会的群体结构、主体画像和模拟规则参数，推演发布内容在虚拟社会中的传播和反馈过程。",
+    surveyOnly: "系统将根据导入的调查问卷数据和参数转换结果，推演发布内容在虚拟社会中的传播和反馈过程。",
+    surveyAndVirtual: "系统将根据调查问卷数据和虚拟人群画像，按照当前权重融合后进行推演。",
+    publicData: "系统将根据公开数据来源和虚拟社会群体结构进行校准后推演。"
+  };
+  const _simRole = state.sourceRole || "virtualOnly";
+  const _simDescEl = $("simDesc");
+  if(_simDescEl){
+    const _simTxt = simDescMap[_simRole] || simDescMap.virtualOnly;
+    _simDescEl.innerHTML = "系统将根据<b>" + esc(_simTxt.replace("系统将根据","")) + "</b>";
+  }
   const s = state.catSoc, c = state.cat;
   $("simSub").innerHTML = "推演对象：「<b>" + esc(state.content.length>34 ? state.content.slice(0,34)+"…" : state.content) + "</b>」 · 场景：<b>" + s.name + " / " + c.name + "</b> · 主体：<b>五类角色</b> · 模式：<b>多主体行为推演 V2</b>";
-  $("simSteps").innerHTML = SIM_STEPS.map((x,i)=>`
+  // 步骤 2 文案按数据来源动态变化，virtualOnly 不提及问卷参数
+  const step2TextMap = {
+    virtualOnly: "直接受影响与间接受影响主体按群体画像与模拟规则参数计算初始态度",
+    surveyOnly: "直接受影响与间接受影响主体按问卷参数换算结果计算初始态度",
+    surveyAndVirtual: "直接受影响与间接受影响主体按画像与问卷参数计算初始态度",
+    publicData: "直接受影响与间接受影响主体按画像与公开数据校准基线计算初始态度"
+  };
+  const _simSteps = SIM_STEPS.map(x => x.slice());
+  if(_simSteps[1]) _simSteps[1][2] = step2TextMap[_simRole] || step2TextMap.virtualOnly;
+  $("simSteps").innerHTML = _simSteps.map((x,i)=>`
     <div class="sim-step" id="simStep-${i}">
       <div class="ss-ico">${x[0]}</div>
       <div class="ss-txt"><b>${x[1]}</b><small>${x[2]}</small></div>
@@ -2826,6 +2902,25 @@ function groupDynamicsJS(goal, scope, strength){
   });
   return {rows, support:Math.round(tSup*10)/10, risk:Math.round(tRisk*10)/10, corr:corrSum};
 }
+/* 当前虚拟社会总人数：第6步群体结构页各群体人数之和（未初始化时按社会类型默认总人数回退） */
+function currentTotalPopulation(){
+  const t = _groupTotalGet();
+  if(t > 0) return t;
+  const d = state.demographics;
+  if(d && d.total > 0) return d.total;
+  return personaDefaultTotal(state.soc || "school");
+}
+/* 受影响人数（第10/13/14步统一口径，禁止固定10万基准）：
+   affectedPopulation = min(当前虚拟社会总人数 × 发布范围系数 × 群体相关系数, 当前虚拟社会总人数) */
+function affectedPopulationFor(goal, scope, strength){
+  goal = GOAL_WEIGHTS[goal] ? goal : "提高满意度";
+  scope = (scope in SCOPE_FACTOR) ? scope : "部分群体";
+  strength = STRENGTH_FACTOR[strength] ? strength : "中等";
+  const total = currentTotalPopulation();
+  const sf = SCOPE_FACTOR[scope];
+  const corr = groupDynamicsJS(goal, scope, strength).corr;
+  return Math.min(Math.round(total * sf * corr), total);
+}
 function coreMetrics(goal, scope, strength){
   goal = GOAL_WEIGHTS[goal] ? goal : "提高满意度";
   scope = (scope in SCOPE_FACTOR) ? scope : "部分群体";
@@ -2885,7 +2980,7 @@ function calcMetrics(goal, scope, strength, personaAdj){
   out.recPlan = out.risk >= 55 ? "试点方案" : (out.risk >= 35 ? "限制方案" : "温和方案");
   out.impacts = attrDeltas(goal, scope, strength);
   out.base = {approve:68,oppose:21,benefit:70,cost:45,risk:42,fairness:73,diffNum:50,behavior:45};
-  out.affected = Math.round(100000 * SCOPE_FACTOR[scope] * groupDynamicsJS(goal, scope, strength).corr);
+  out.affected = affectedPopulationFor(goal, scope, strength);
   return out;
 }
 function computeMetrics(){ return calcMetrics(state.goal, state.scope, state.strength, null); }
@@ -2941,19 +3036,27 @@ function fuseSides(q, p){
   return f;
 }
 function showResults(){
-  const both = state.useSurvey && state.usePersona;
+  // 数据来源角色：virtualOnly / surveyOnly / surveyAndVirtual / publicData（以 sourceRole 为准）
+  const role = state.sourceRole
+    || (state.useSurvey && state.usePersona ? "surveyAndVirtual"
+      : state.useSurvey ? "surveyOnly" : "virtualOnly");
+  const both = (role === "surveyAndVirtual");
   let qSide = null, pSide = null, fused;
-  if(state.useSurvey) qSide = computeQuestionnaireSide();
-  if(state.usePersona) pSide = computePersonaSide();
+  if(role === "surveyOnly" || role === "surveyAndVirtual") qSide = computeQuestionnaireSide();
+  if(role === "virtualOnly" || role === "surveyAndVirtual" || role === "publicData") pSide = computePersonaSide();
   if(both){
     fused = fuseSides(qSide, pSide);
-  } else if(state.useSurvey){
+  } else if(role === "surveyOnly"){
     fused = Object.assign({}, qSide);
     fused.wq = 100; fused.wp = 0; fused.label = "调查数据";
   } else {
     fused = Object.assign({}, pSide);
-    fused.wq = 0; fused.wp = 100; fused.label = "虚拟人群模拟";
+    fused.wq = 0; fused.wp = 100;
+    fused.label = (role === "publicData") ? "公开数据校准结果" : "虚拟人群模拟";
   }
+  // 受影响人数：统一按「当前虚拟社会总人数 × 范围系数 × 群体相关系数」封顶计算，
+  // 结果总览（第10步）/ 方案对比（第13步）/ 报告（第14步）共用同一值
+  state.affectedPopulation = affectedPopulationFor(state.goal, state.scope, state.strength);
   const m = fused;
   // 在线模式（后端返回成功）时，指标卡优先使用后端推演引擎结果，与后端公式严格一致；
   // 离线回退时使用本地模型（本地核心公式与后端 simulate_metrics 逐项一致，融合侧仅用于双源加权展示）
@@ -2962,6 +3065,9 @@ function showResults(){
   // 对齐后的指标对象：在线模式下以后端为准，供全页下游（报告/导出）统一读取
   const align = Object.assign({}, m);
   if(rm){ ["approve","oppose","benefit","cost","risk","fairness","diffNum","behavior","diff","hole","recPlan"].forEach(k=>{ if(rm[k]!==undefined) align[k]=rm[k]; }); }
+  // 受影响人数固定使用共享口径（后端 composite 若可用且为同一基础口径时取其值便于比对，仍以封顶口径兜底）
+  const aff = state.affectedPopulation;
+  align.affected = aff;
   state.recMetrics = align;
   state.recPlan = align.recPlan;
   const s = state.catSoc, c = state.cat;
@@ -2971,8 +3077,12 @@ function showResults(){
     "温和方案":c.soft
   }[eff("recPlan")];
   $("conclText").innerHTML = state.remote && state.remote.conclusion ? state.remote.conclusion : `系统识别场景：<b>${s.name} · ${c.name}</b>。在虚拟社会中针对“<b>${esc(state.content)}</b>”的推演显示：该发布内容<b>具有一定可行性</b>，预计总体赞成度较高（<b>${eff("approve")}%</b>），但存在<b>「${c.vuln[0]}」</b>等规则漏洞与<b>潜在受损主体</b>（${esc((Object.assign({},s.subj,c.subs||{})).v)}）受益不均的风险（风险指数 <b>${eff("risk")}/100</b>）。建议采用<b>「${eff("recPlan")}」</b>：${esc(recDesc)}，并设置限制条件和反馈机制。`;
+  const srcFoot = role === "virtualOnly" ? "虚拟人群 ×100%（未使用问卷）"
+    : role === "surveyOnly" ? "调查问卷 ×100%（未使用虚拟人群）"
+    : role === "publicData" ? "公开数据校准 ×100%"
+    : (rm ? "后端推演引擎（规则属性全链路）" : "问卷×"+fused.wq+"% + 虚拟人群×"+fused.wp+"%");
   const cards = [
-    {label:"总体支持度", val:eff("approve")+"%", cls:"mv-blue", fill:"fb-blue", pct:eff("approve"), foot: rm ? "后端推演引擎（规则属性全链路）" : "问卷×"+fused.wq+"% + 虚拟人群×"+fused.wp+"%"},
+    {label:"总体支持度", val:eff("approve")+"%", cls:"mv-blue", fill:"fb-blue", pct:eff("approve"), foot:srcFoot},
     {label:"总体反对度", val:eff("oppose")+"%", cls:"mv-red", fill:"fb-red", pct:eff("oppose"), foot:"潜在投诉与冲突的主体基础"},
     {label:"目标收益", val:eff("benefit")+"/100", cls:"mv-green", fill:"fb-green", pct:eff("benefit"), foot:"按发布目标评估的预期收益水平"},
     {label:"实施成本", val:eff("cost")+"/100", cls:"mv-amber", fill:"fb-amber", pct:eff("cost"), foot:"执行、管理与资源投入的估算"},
@@ -2980,7 +3090,7 @@ function showResults(){
     {label:"公平性评分", val:eff("fairness")+"/100", cls:"mv-green", fill:"fb-green", pct:eff("fairness"), foot:"主体间受益/受损分布的均衡程度"},
     {label:"执行难度", val:eff("diff"), cls:"mv-violet", fill:"fb-violet", pct:eff("diff")==="偏高"?78:eff("diff")==="中等"?50:28, foot:"管理执行主体的实施成本与压力"},
     {label:"行为变化", val:eff("behavior")+"/100", cls:"mv-violet", fill:"fb-violet", pct:eff("behavior"), foot:"规则推动主体行为改变的程度"},
-    {label:"受影响人数", val:fmtAffected(remoteAffected() || m.affected), cls:"mv-blue", fill:"fb-blue", pct:60, foot:"总人数 × 范围因子 × 群体相关系数"},
+    {label:"受影响人数", val:fmtAffected(aff), cls:"mv-blue", fill:"fb-blue", pct:60, foot:"总人数 × 范围因子 × 群体相关系数（不超过总人数）"},
     {label:"推荐策略", val:eff("recPlan"), cls:"mv-blue", fill:"fb-blue", pct:80, foot:recDesc, wide:true, isText:true}
   ];
   $("metricGrid").innerHTML = cards.map(x=>`
@@ -2990,9 +3100,21 @@ function showResults(){
       <div class="m-bar"><div class="m-fill ${x.fill}" data-pct="${x.pct}"></div></div>
       <div class="m-foot">${esc(x.foot)}</div>
     </div>`).join("");
+  // 受影响人数计算依据（统一口径，第10/13/14步共用）
+  const affBasis = $("affectedBasis");
+  if(affBasis){
+    const total = currentTotalPopulation();
+    const sf = SCOPE_FACTOR[state.scope in SCOPE_FACTOR ? state.scope : "部分群体"];
+    const corr = Math.round(groupDynamicsJS(state.goal, state.scope, state.strength).corr*100)/100;
+    affBasis.innerHTML = `
+      <div class="cred-row"><span class="cred-key">当前虚拟社会总人数</span><span class="cred-val">${total.toLocaleString("zh-CN")}人</span></div>
+      <div class="cred-row"><span class="cred-key">发布范围系数</span><span class="cred-val">${sf}</span></div>
+      <div class="cred-row"><span class="cred-key">群体相关系数</span><span class="cred-val">${corr}</span></div>
+      <div class="cred-row"><span class="cred-key">计算结果：受影响人数</span><span class="cred-val">${aff.toLocaleString("zh-CN")}人</span></div>`;
+  }
   goPage(8);
   setTimeout(()=>{ document.querySelectorAll(".m-fill").forEach(el=>{ el.style.width = el.dataset.pct + "%"; }); }, 80);
-  renderSourceCompare(qSide, pSide, fused, both);
+  renderSourceCompare(qSide, pSide, fused, role);
   renderFactorContributions();
   renderAttributeBasis();
   renderCompareScenarios();
@@ -3129,12 +3251,25 @@ function buildReport(){
     reportHTML = state.remote.report.head + '<div class="report-body">'
       + state.remote.report.sections.map((x,i)=>`<div class="r-sec"><div class="r-sec-title"><span class="r-no">${i+1}</span>${x.t}</div>${x.html}</div>`).join("")
       + '</div>';
+    // 受影响人数统一口径：第10/13/14页共用同一个值，替换远程报告中的受影响人数句
+    const aff = state.affectedPopulation || affectedPopulationFor(state.goal, state.scope, state.strength);
+    const total = currentTotalPopulation();
+    const sf = SCOPE_FACTOR[state.scope] || 0.6;
+    const corr = Math.round((groupDynamicsJS(state.goal, state.scope, state.strength).corr)*100)/100;
+    reportHTML = reportHTML.replace(
+      /受影响人数约 <b>[^<]*<\/b> 人（范围因子 [\d.]+ × 群体相关系数 [\d.]+，基准人口 [\d,]+）/,
+      "受影响人数约 <b>" + aff.toLocaleString("zh-CN") + "</b> 人（范围因子 " + sf + " × 群体相关系数 " + corr + "，当前虚拟社会总人数 " + total.toLocaleString("zh-CN") + " 人）"
+    );
     $("reportBox").innerHTML = reportHTML;
     return;
   }
   const s = state.catSoc, c = state.cat, m = state.recMetrics || computeMetrics();
   const subs = Object.assign({}, s.subj, c.subs||{});
-  const src = state.dataSource || "系统内置模拟参数（基于「" + s.name + " · " + c.name + "」主体画像仿真生成）";
+  const role = state.sourceRole || "virtualOnly";
+  const src = role === "publicData" ? (state.dataSourceLabel || "公开数据")
+    : role === "surveyOnly" ? (state.dataSourceLabel || "调查问卷数据")
+    : role === "surveyAndVirtual" ? "调查问卷数据 + 虚拟人群（按权重融合）"
+    : "虚拟人群模拟（当前社会类型对应的虚拟群体结构与模拟参数）";
   const dateStr = new Date().toLocaleDateString("zh-CN");
   const confText = state.inferred ? "推断模式（<b>以下为基于当前社会类型的推断</b>：输入未命中关键词，按「" + c.name + "」推断）" : "高置信模式（关键词「" + state.matchedKw + "」命中「" + c.name + "」）";
   const planList = [
@@ -3149,11 +3284,12 @@ function buildReport(){
     strength: state.strength, strength_effect: STRENGTH_BASIS[state.strength] || ""
   };
   const dyn = groupDynamicsJS(state.goal, state.scope, state.strength);
-  const affected = Math.round(100000 * (SCOPE_FACTOR[state.scope]||0.6) * dyn.corr);
+  // 受影响人数统一口径：第10/13/14页共用同一个值（state.affectedPopulation），禁止固定 10 万基准
+  const affected = state.affectedPopulation || affectedPopulationFor(state.goal, state.scope, state.strength);
   const secs = [
     {t:"一、发布内容概述", html:`<p>本次试运行的分析对象为：<b>“${esc(state.content)}”</b>。规则属性设定为：发布目标「${state.goal}」、发布范围「${state.scope}」、规则强度「${state.strength}」。识别置信方式：${confText}。</p>
       <p><b>本结果受以下规则属性影响：</b><br>发布目标「${ab.goal}」：${ab.goal_effect}<br>发布范围「${ab.scope}」：${ab.scope_effect}<br>规则强度「${ab.strength}」：${ab.strength_effect}</p>
-      <p>核心推演参数：综合支持度 <b>${dyn.support}</b>、综合风险值 <b>${m.risk}</b>、受影响人数约 <b>${affected.toLocaleString("zh-CN")}</b> 人（范围因子 ${SCOPE_FACTOR[state.scope]||0.6} × 群体相关系数 ${Math.round(dyn.corr*100)/100}，基准人口 100,000）。</p>`},
+      <p>核心推演参数：综合支持度 <b>${dyn.support}</b>、综合风险值 <b>${m.risk}</b>、受影响人数约 <b>${affected.toLocaleString("zh-CN")}</b> 人（范围因子 ${SCOPE_FACTOR[state.scope]||0.6} × 群体相关系数 ${Math.round(dyn.corr*100)/100}，当前虚拟社会总人数 ${currentTotalPopulation().toLocaleString("zh-CN")} 人）。</p>`},
     {t:"二、虚拟社会类型与规则类别", html:`<p>本次推演选用的虚拟社会类型为<b>「${s.ico} ${s.name}」</b>，识别到的规则类别为<b>「${c.name}」</b>（涵盖：${c.desc}）。分析全部使用本场景专属词语，未混入其他场景内容。</p>
       <div class="r-kv">
         <div class="kv"><div class="k">直接受影响主体</div><div class="v">${subs.d}</div></div>
@@ -3163,7 +3299,7 @@ function buildReport(){
         <div class="kv"><div class="k">高风险行为主体</div><div class="v">${subs.h}</div></div>
         <div class="kv"><div class="k">主要群体</div><div class="v">${s.groups}</div></div>
       </div>`},
-    {t:"三、数据来源", html:`<p>本次推演使用的数据来源为：<b>${esc(src)}</b>；公开数据（${s.data}）用于校准主体规模与行为基线。问卷统计按参数转换表映射为初始赞成度、成本感知、公平风险、漏洞风险与行为变化概率等推演参数。</p>`},
+    {t:"三、数据来源", html:`<p>本次推演使用的数据来源为：<b>${esc(src)}</b>。${role === "surveyOnly" ? "问卷统计按参数转换表映射为初始赞成度、成本感知、公平风险、漏洞风险与行为变化概率等推演参数。" : role === "surveyAndVirtual" ? "问卷数据与虚拟人群按当前权重融合后参与推演。" : role === "publicData" ? "公开数据用于校准主体规模与行为基线。" : "未使用调查问卷与公开数据，推演完全基于当前社会类型对应的虚拟群体结构与模拟参数。"}</p>`},
     {t:"四、主体反应（五类角色）", html:`<p>推演显示五类主体对同一规则的反应存在显著差异：</p>
       <ul>
         <li><b>支持与观望</b>：直接受影响主体（${subs.d}）预期受益，赞成度约 72%；间接受影响主体（${subs.i}）态度中立（约 54%），短期以观望为主。</li>
@@ -4084,7 +4220,7 @@ function _renderDemoCredibility(){
     <div class="cred-row"><span class="cred-key">总人数</span><span class="cred-val">${d.total}${d.totalEstimated?'（估算值）':''}</span></div>
     <div class="cred-row"><span class="cred-key">启用人群数</span><span class="cred-val">${coverage} / ${d.groups.length}</span></div>
     <div class="cred-row"><span class="cred-key">人数覆盖</span><span class="cred-val">${hasCount?'已由占比 × 总人数估算':'未提供总人数'}</span></div>
-    <div class="cred-row"><span class="cred-key">问卷结果</span><span class="cred-val">来自前端采集 / 模拟</span></div>
+    ${state.useSurvey !== false ? `<div class="cred-row"><span class="cred-key">问卷结果</span><span class="cred-val">来自前端采集 / 模拟</span></div>` : ""}
     <div class="cred-row"><span class="cred-key">说明</span><span class="cred-val">本页数据为演示用模拟参数；上传文件不会自动提升可信度，仅当字段完整且一致时才标注「用户导入数据」。</span></div>
     ${(d.warnings&&d.warnings.length)?`<div style="margin-top:12px">${d.warnings.map(w=>`<div class="cred-warn">${esc(w)}</div>`).join("")}</div>`:""}
   `;
@@ -4313,7 +4449,7 @@ function _demoReportHtml(){
   const rows=(d.groups||[]).filter(g=>g.enabled!==false).slice().sort((a,b)=>b.ratio-a.ratio).map(g=>`<tr><td>${esc(g.name)}</td><td>${g.ratio.toFixed(1)}%</td><td>${(d.total||0)?Math.round(d.total*g.ratio/100):"—"}</td><td>${g.weight}</td><td>${g.focus?'是':'否'}</td></tr>`).join("");
   return `<p>第 14 步已按当前虚拟社会类型「${m.ico} ${lib}」生成人口结构校准模型，共 ${(d.groups||[]).length} 类人群，总人数 ${d.total||0}${d.totalEstimated?'（估算值）':''}，数据来源：<b>${srcMap[d.source]||srcMap.default}</b>，可信度：<b>${cred}</b>。</p>
    <table class="r-tbl"><thead><tr><th>人群</th><th>占比</th><th>估算人数</th><th>影响权重</th><th>重点关注</th></tr></thead><tbody>${rows}</tbody></table>
-   <p class="demo-notes">本页人群权重已纳入第 15 步双源融合（虚拟人物侧）与后续行为推演；默认比例为演示用模拟参数，非真实统计。</p>`;
+   <p class="demo-notes">${(state.useSurvey && state.usePersona) ? "本页人群权重已纳入第 15 步双源融合（虚拟人物侧）与后续行为推演；默认比例为演示用模拟参数，非真实统计。" : "本页人群权重已纳入后续行为推演（虚拟人群模拟侧）；默认比例为演示用模拟参数，非真实统计。"}</p>`;
 }
 
 /* ----- 第15页：推演权重设置 ----- */
@@ -4352,7 +4488,7 @@ function renderFusionSetupPage(){
       const srcMap={default:"默认模拟参数（系统预置，非真实统计）",user:"用户校准数据（手动 / 数值调整）",imported:"用户导入数据（Excel / CSV）"};
       db.innerHTML = `<div class="cred-row"><span class="cred-key">已载入人口结构</span><span class="cred-val">虚拟${esc(personaLibName(d.soc))} · 共 ${d.groups.length} 类人群 · 总人数 ${d.total||0}${d.totalEstimated?'（估算值）':''}</span></div>
         <div class="cred-row"><span class="cred-key">数据来源</span><span class="cred-val">${srcMap[d.source]||srcMap.default}</span></div>
-        <div class="cred-row"><span class="cred-key">融合说明</span><span class="cred-val">上述人群占比与「影响权重」已作为「虚拟人物」侧的基础，参与第 8 步双源融合与后续行为推演。</span></div>`;
+        <div class="cred-row"><span class="cred-key">${(state.useSurvey && state.usePersona) ? "融合说明" : "说明"}</span><span class="cred-val">${(state.useSurvey && state.usePersona) ? "上述人群占比与「影响权重」已作为「虚拟人物」侧的基础，参与第 8 步双源融合与后续行为推演。" : "上述人群占比与「影响权重」已作为虚拟人群模拟的基础，参与后续行为推演。"}</span></div>`;
     }else{
       db.innerHTML = `<div class="cred-row"><span class="cred-key">人口结构</span><span class="cred-val">尚未在人口结构页设置，将沿用当前虚拟社会类型的默认模型估算。</span></div>`;
     }
@@ -4459,6 +4595,9 @@ function onSourceModeChange(){
   if(mode === "survey") state.sourceRole = "surveyOnly";
   else if(mode === "persona") state.sourceRole = "virtualOnly";
   else state.sourceRole = "surveyAndVirtual";
+  state.dataSource = state.sourceRole;
+  state.dataSourceLabel = "";
+  state.dataSourceUrl = "";
   const desc = $("srcModeDesc"), hint = $("srcModeHint");
   if(desc){
     if(mode === "survey") desc.textContent = "仅使用调查问卷：系统只基于调查数据进行分析，不生成虚拟人物模拟，也不显示虚拟人物权重。";
@@ -4539,10 +4678,28 @@ async function applyFusionAndGo(){
   runSimulation();
 }
 
-/* ----- 第8页：三来源对比 + 无数据提示 ----- */
-function renderSourceCompare(q, p, f, both){
+/* ----- 第8页：结果来源对比（按数据来源角色渲染，questionnaire / persona / public 专用卡片） ----- */
+function renderSourceCompare(q, p, f, role){
   const box = $("sourceCompare");
   if(!box) return;
+  const roleNow = role || "virtualOnly";
+  const titleEl = $("srcCompareTitle"), hintEl = $("srcCompareHint");
+  const titles = {
+    virtualOnly:"虚拟人群模拟结果",
+    surveyOnly:"问卷统计结果",
+    surveyAndVirtual:"三类数据来源对比",
+    publicData:"公开数据校准结果"
+  };
+  const hints = {
+    virtualOnly:"虚拟群体支持度 · 风险指数 · 公平性 · 执行压力",
+    surveyOnly:"问卷转换后的支持度 · 风险 · 公平性 · 执行难度",
+    surveyAndVirtual:"问卷数据 · 虚拟人群模拟 · 加权综合",
+    publicData:"公开数据来源 · 官方网站 · 数据时间 · 适用范围"
+  };
+  if(titleEl) titleEl.textContent = titles[roleNow] || titles.virtualOnly;
+  if(hintEl) hintEl.textContent = hints[roleNow] || hints.virtualOnly;
+  const rdEl = $("rdHint");
+  if(rdEl) rdEl.textContent = (titles[roleNow] || titles.virtualOnly) + " · 因素贡献 · 调整前后对比";
   const items = m => `
         <div class="src-item"><span class="src-k">支持度</span><b>${m.approve}%</b></div>
         <div class="src-item"><span class="src-k">反对度</span><b>${m.oppose}%</b></div>
@@ -4557,7 +4714,24 @@ function renderSourceCompare(q, p, f, both){
       <div class="src-head"><span class="src-tag ${tag}">${label}</span></div>
       <div class="src-grid">${items(m)}</div>
     </div>`;
-  if(both){
+  if(roleNow === "publicData"){
+    const sel = (OPEN_DATA_SOURCES[state.soc] || OPEN_DATA_SOURCES.school)
+      .find(d => d.url === state.selOpenUrl)
+      || {name:state.selOpenName||"公开数据来源", site:"", url:state.selOpenUrl||"", type:"", published:"", updated:"", region:"", audience:""};
+    box.innerHTML =
+      card("公开数据校准结果", "src-p", p) +
+      `<div class="cred-box" style="margin-top:14px">
+        <div class="cred-row"><span class="cred-key">公开数据来源</span><span class="cred-val">${esc(sel.name || state.selOpenName || "公开数据来源")}</span></div>
+        <div class="cred-row"><span class="cred-key">数据名称</span><span class="cred-val">${esc(sel.type || "官方公开统计数据")}</span></div>
+        <div class="cred-row"><span class="cred-key">官方网站</span><span class="cred-val">${esc(sel.site || "")} ${esc(sel.url || "")}</span></div>
+        <div class="cred-row"><span class="cred-key">数据时间</span><span class="cred-val">${esc(sel.updated || sel.published || "持续更新")}</span></div>
+        <div class="cred-row"><span class="cred-key">数据适用范围</span><span class="cred-val">${esc((sel.region?sel.region+" · ":"") + (sel.audience||"全体相关主体"))}</span></div>
+        <div class="cred-row"><span class="cred-key">校准说明</span><span class="cred-val">以虚拟社会群体结构为基础，采用所选公开数据来源进行校准后的结果。</span></div>
+      </div>
+      <div class="src-diff"><b>结果来源：</b>本次使用公开数据来源校准，综合结果 = 公开数据校准结果（虚拟社会群体结构为推演基础）。</div>`;
+    return;
+  }
+  if(roleNow === "surveyAndVirtual"){
     const qLabel = q.simulated ? "问卷数据（模拟）" : "问卷数据";
     const wq = f.wq, wp = f.wp;
     const formulaVal = (q.approve*wq/100 + p.approve*wp/100).toFixed(1);
@@ -4572,15 +4746,17 @@ function renderSourceCompare(q, p, f, both){
         <b>三者差异：</b>综合结果 = 调查数据 × ${wq}% + 虚拟人群 × ${wp}%。虚拟人群侧的风险指数（${p.risk}）通常高于调查侧（${q.risk}），因为它补充了未被调查到的少数群体、隐藏风险与行为链推演。<br>
         <b>权重说明：</b>${recTxt}；你最终采用的权重为 <b>调查数据 ${wq}% / 虚拟人群 ${wp}%</b>。
       </div>`;
-  } else if(q){
+    return;
+  }
+  if(roleNow === "surveyOnly"){
     box.innerHTML =
       card("调查数据", "src-q", q) +
-      `<div class="src-diff"><b>结果来源：</b>本次仅使用调查数据，综合结果 = 调查数据分析结果。</div>`;
-  } else {
-    box.innerHTML =
-      card("虚拟人群模拟", "src-p", p) +
-      `<div class="src-diff"><b>结果来源：</b>本次仅使用虚拟人群模拟，综合结果 = 虚拟人群模拟结果。</div>`;
+      `<div class="src-diff"><b>结果来源：</b>本次仅使用调查数据，综合结果 = 调查数据分析结果（不含虚拟人群模拟）。</div>`;
+    return;
   }
+  box.innerHTML =
+    card("虚拟人群模拟", "src-p", p) +
+    `<div class="src-diff"><b>结果来源：</b>本次仅使用虚拟人群模拟（当前社会类型对应的虚拟群体结构与模拟参数），综合结果 = 虚拟人群模拟结果，未使用问卷数据与公开数据。</div>`;
 }
 
 /* ----- 结果来源与影响因素 ----- */
@@ -4613,17 +4789,28 @@ function renderFactorContributions(){
   if(!box) return;
   const m = computeMetrics();
   const imp = m.impacts || {};
+  const role = state.sourceRole
+    || (state.useSurvey && state.usePersona ? "surveyAndVirtual"
+      : state.useSurvey ? "surveyOnly" : "virtualOnly");
   const wq = (state.schoolSim && state.schoolSim.weights) ? state.schoolSim.weights.questionnaire : 0.6;
   const wp = 1 - wq;
-  const both = state.useSurvey && state.usePersona;
+  const both = (role === "surveyAndVirtual");
   const names = {approve:"支持度",oppose:"反对度",benefit:"目标收益",cost:"实施成本",risk:"风险指数",fairness:"公平性",diffNum:"执行难度",behavior:"行为变化"};
   const fmt = obj => {
     const ks = Object.keys(obj||{});
     return ks.length ? ks.map(k => names[k]||k + " " + (obj[k]>0?"+":"") + obj[k]).join("、") : "无额外影响";
   };
   let sourceItems = "";
-  if(state.useSurvey) sourceItems += `<div class="fc-item"><span class="fc-k">调查数据贡献</span><span class="fc-v">权重 ${both ? Math.round(wq*100) : 100}%</span></div>`;
-  if(state.usePersona) sourceItems += `<div class="fc-item"><span class="fc-k">虚拟人群贡献</span><span class="fc-v">权重 ${both ? Math.round(wp*100) : 100}%</span></div>`;
+  if(role === "publicData"){
+    sourceItems += `<div class="fc-item"><span class="fc-k">公开数据贡献</span><span class="fc-v">来源校准（权重 100%）</span></div>`;
+  } else if(both){
+    sourceItems += `<div class="fc-item"><span class="fc-k">调查数据贡献</span><span class="fc-v">权重 ${Math.round(wq*100)}%</span></div>`;
+    sourceItems += `<div class="fc-item"><span class="fc-k">虚拟人群贡献</span><span class="fc-v">权重 ${Math.round(wp*100)}%</span></div>`;
+  } else if(role === "surveyOnly"){
+    sourceItems += `<div class="fc-item"><span class="fc-k">调查数据贡献</span><span class="fc-v">权重 100%</span></div>`;
+  } else {
+    sourceItems += `<div class="fc-item"><span class="fc-k">虚拟人群贡献</span><span class="fc-v">权重 100%</span></div>`;
+  }
   box.innerHTML = `
     <div class="fc-grid">
       ${sourceItems}
@@ -4678,6 +4865,11 @@ function renderNoDataHint(){
 /* ----- 第8页：融合计算依据展示 ----- */
 function renderFusionBasis(){
   const box = $("fusionBasis");
+  const role = state.sourceRole || "virtualOnly";
+  if(role !== "surveyAndVirtual"){   // 仅「问卷+虚拟人物」双选模式展示融合计算依据
+    box.style.display = "none";
+    return;
+  }
   const ss = state.remote && state.remote.school_simulation;
   const dsf = ss && ss.dual_source_fusion;
   const dm = ss && ss.demographics;
