@@ -103,21 +103,28 @@ def backup(db_path):
 
 
 def restore_sessions(sessions_dir):
-    """启动时调用：本地 sessions 目录无任何会话 JSON 时从 GitHub 恢复。返回是否执行了恢复。"""
+    """启动时调用：从 GitHub 快照补齐本地缺失的会话文件。
+
+    只补缺、不覆盖：已有文件说明是本地更新数据，保留；GitHub 快照有而本地缺的
+    文件（重部署磁盘清空或残留不完整时）补进来。返回是否补入了文件。
+    """
     token, repo = _conf()
     if not enabled():
         return False
     try:
         os.makedirs(sessions_dir, exist_ok=True)
-        if any(f.endswith(".json") for f in os.listdir(sessions_dir)):
-            return False
         content = _req("GET", f"{_API}/repos/{repo}/contents/{_SESSIONS_FILE}?ref={_BRANCH}", token)
         data = base64.b64decode(content["content"])
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             names = [n for n in zf.namelist() if n.endswith(".json")]
-            zf.extractall(sessions_dir)
-        print(f"Sessions restored from GitHub backup: {len(names)} files -> {sessions_dir}", flush=True)
-        return True
+            missing = [n for n in names if not os.path.exists(os.path.join(sessions_dir, n))]
+            for n in missing:
+                zf.extract(n, sessions_dir)
+        if missing:
+            print(f"Sessions restored from GitHub backup: {len(missing)} new files -> {sessions_dir}", flush=True)
+            return True
+        print("Sessions restore skipped: no new files in GitHub snapshot", flush=True)
+        return False
     except Exception as e:
         print("Sessions restore skipped:", e, flush=True)
         return False
